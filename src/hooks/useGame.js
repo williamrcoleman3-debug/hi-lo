@@ -1,21 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   freshDeck,
-  calcProbs,
+  getActiveProbs,
   growthFor,
   prepareCall,
   isCorrectCall,
   applyWin,
   TIMER_MS,
   AUTO_ADVANCE_MS,
+  DEFAULT_PRICING_MODE,
 } from "../engine";
 
 const REVEAL_DELAY_MS = 500; // pause between draw and resolution, so the card can flip into view
 
-export function useGame() {
-  const initial = freshDeck();
-  const [deck, setDeck] = useState(() => initial.slice(1));
-  const [compareCard, setCompareCard] = useState(() => initial[0]);
+// `level` is a level config from engine/levels.js ({ id, suits, deckCopies, ante, ... }).
+// `onCorrectCall(levelId, call, { streak, trueProbs })` fires after every
+// correct call, before the round advances — lets a progress tracker record
+// achievements live, without this hook knowing anything about persistence.
+// `onRunEnd(levelId, { amount, wasBanked })` fires once a run is over, via
+// either an actual Bank or a Bust — `amount` is just whatever `banked`
+// equals at that moment, since it only ever grows before a run's terminal
+// event. Skipped entirely when amount is 0 (nothing worth recording).
+export function useGame(level, { onCorrectCall, onRunEnd } = {}) {
+  const buildRound = useCallback(() => {
+    const d = freshDeck(level);
+    return { deck: d.slice(1), compareCard: d[0] };
+  }, [level]);
+
+  const [deck, setDeck] = useState(() => buildRound().deck);
+  const [compareCard, setCompareCard] = useState(() => buildRound().compareCard);
   const [revealedCard, setRevealedCard] = useState(null);
   const [streak, setStreak] = useState(0);
   const [banked, setBanked] = useState(0);
@@ -33,9 +46,10 @@ export function useGame() {
   const toastId = useRef(0);
   const intervalRef = useRef(null);
   const autoAdvanceRef = useRef(null);
+  const isFirstLevelRender = useRef(true);
 
   const decisionPaused = status !== "playing" || revealing || awaitingAdvance;
-  const probs = calcProbs(deck, compareCard.rank.value);
+  const probs = getActiveProbs(DEFAULT_PRICING_MODE, { deck, compareCard, levelConfig: level });
   const growths = {
     higher: growthFor(probs.pHigher),
     lower: growthFor(probs.pLower),
@@ -62,8 +76,9 @@ export function useGame() {
       fireFlash("lose");
       setShake(true);
       setTimeout(() => setShake(false), 420);
+      if (banked > 0) onRunEnd?.(level.id, { amount: banked, wasBanked: false });
     },
-    [fireFlash]
+    [fireFlash, banked, level, onRunEnd]
   );
 
   useEffect(() => {
@@ -88,9 +103,9 @@ export function useGame() {
   }, [compareCard, status, revealing, awaitingAdvance]);
 
   const startNewGame = useCallback(() => {
-    const d = freshDeck();
-    setDeck(d.slice(1));
-    setCompareCard(d[0]);
+    const { deck: d, compareCard: c } = buildRound();
+    setDeck(d);
+    setCompareCard(c);
     setRevealedCard(null);
     setStreak(0);
     setBanked(0);
@@ -98,7 +113,19 @@ export function useGame() {
     setAwaitingAdvance(false);
     setMessage("Call it before the clock runs out.");
     setShake(false);
-  }, []);
+  }, [buildRound]);
+
+  // Switching levels abandons the current run (like letting the timer run
+  // out) and deals a fresh shoe for the new level. Skipped on mount, since
+  // the initial state above already set up the starting level's round.
+  useEffect(() => {
+    if (isFirstLevelRender.current) {
+      isFirstLevelRender.current = false;
+      return;
+    }
+    startNewGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level.id]);
 
   const cashOut = useCallback(() => {
     if (banked <= 0 || status !== "playing") return;
@@ -107,15 +134,16 @@ export function useGame() {
     setStatus("cashed");
     setMessage(`Banked ${banked.toLocaleString()} points. Locked in for good.`);
     fireFlash("win");
-  }, [banked, status, fireFlash]);
+    onRunEnd?.(level.id, { amount: banked, wasBanked: true });
+  }, [banked, status, fireFlash, level, onRunEnd]);
 
   const makeCall = useCallback(
     (call) => {
       if (status !== "playing" || revealing || awaitingAdvance) return;
 
-      const prepared = prepareCall(deck, compareCard, call);
+      const prepared = prepareCall(deck, compareCard, call, { levelConfig: level, mode: DEFAULT_PRICING_MODE });
       if (!prepared) return; // shouldn't happen — button is disabled when a call is impossible
-      const { p, growth, drawn, rest } = prepared;
+      const { p, growth, drawn, rest, trueProbs } = prepared;
 
       clearInterval(intervalRef.current);
       setRevealing(true);
@@ -127,7 +155,7 @@ export function useGame() {
 
         if (correct) {
           const newStreak = streak + 1;
-          const { newBanked, gain } = applyWin(banked, growth);
+          const { newBanked, gain } = applyWin(banked, growth, level.ante);
           setStreak(newStreak);
           setBanked(newBanked);
           setJustClimbed(true);
@@ -137,18 +165,19 @@ export function useGame() {
           setAwaitingAdvance(true);
           setMessage(
             call === "same"
-              ? `Same rank! True odds ${Math.round(p * 100)}% — +${gain.toLocaleString()} tokens. Tap to keep going.`
+              ? `Same rank! Priced at ${Math.round(p * 100)}% — +${gain.toLocaleString()} tokens. Tap to keep going.`
               : call === "red" || call === "black"
-              ? `${call === "red" ? "Red" : "Black"}! True odds ${Math.round(p * 100)}% — +${gain.toLocaleString()} tokens. Tap to keep going.`
+              ? `${call === "red" ? "Red" : "Black"}! Priced at ${Math.round(p * 100)}% — +${gain.toLocaleString()} tokens. Tap to keep going.`
               : `Correct — streak ${newStreak}. +${gain.toLocaleString()} tokens. Tap to keep going.`
           );
+          onCorrectCall?.(level.id, call, { streak: newStreak, trueProbs });
         } else {
           resolveBust(`Busted on ${drawn.rank.key}${drawn.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`);
         }
         setRevealing(false);
       }, REVEAL_DELAY_MS);
     },
-    [deck, compareCard, streak, banked, status, revealing, awaitingAdvance, spawnToast, fireFlash, resolveBust]
+    [deck, compareCard, streak, banked, status, revealing, awaitingAdvance, level, spawnToast, fireFlash, resolveBust, onCorrectCall]
   );
 
   const advanceRound = useCallback(() => {

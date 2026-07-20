@@ -1,12 +1,13 @@
 import { C } from "../theme";
 import { AVG_REFERENCE } from "../engine";
 
-export function ReferenceLadder({ streak, justClimbed }) {
+export function ReferenceLadder({ streak, justClimbed, ante }) {
   const rungs = Array.from({ length: 8 }, (_, i) => i + 1);
+  const scale = ante / 100; // AVG_REFERENCE is tabulated at a 100-point ante; scales proportionally
   return (
     <div className="flex flex-col-reverse gap-1.5">
       {rungs.map((r) => {
-        const val = AVG_REFERENCE[Math.min(r - 1, AVG_REFERENCE.length - 1)];
+        const val = Math.round(AVG_REFERENCE[Math.min(r - 1, AVG_REFERENCE.length - 1)] * scale);
         const lit = r <= streak;
         const isNext = r === streak + 1;
         const isJustLit = r === streak && justClimbed;

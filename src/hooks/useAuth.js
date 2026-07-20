@@ -46,7 +46,15 @@ export function useAuth() {
   }, [session?.user?.id, fetchProfile]);
 
   const sendCode = useCallback(
-    (email) => supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } }),
+    (email) =>
+      supabase.auth.signInWithOtp({
+        email,
+        // Without this, Supabase falls back to its dashboard "Site URL"
+        // setting for the magic-link redirect — which may not match
+        // wherever this build is actually running (localhost in dev,
+        // the deployed domain in prod). Always redirect to here instead.
+        options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
+      }),
     []
   );
 

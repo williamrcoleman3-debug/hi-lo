@@ -40,13 +40,21 @@ export async function recordLevelProgressRemote(levelId, { streak, sameHit, redB
   if (error) console.error("recordLevelProgressRemote failed:", error.message);
 }
 
+// Returns { isNewPeak } — whether this amount beat the player's previous
+// peak_score for the level, straight from the atomic RPC (see
+// supabase/schema.sql#record_run_end) rather than a separate client-side
+// read-then-compare, which could race across tabs/devices.
 export async function recordRunEndRemote(levelId, amount, wasBanked) {
-  const { error } = await supabase.rpc("record_run_end", {
+  const { data, error } = await supabase.rpc("record_run_end", {
     p_level_id: levelId,
     p_amount: amount,
     p_was_banked: wasBanked,
   });
-  if (error) console.error("recordRunEndRemote failed:", error.message);
+  if (error) {
+    console.error("recordRunEndRemote failed:", error.message);
+    return { isNewPeak: false };
+  }
+  return { isNewPeak: data?.[0]?.is_new_peak ?? false };
 }
 
 // One-time (per sign-in) push of whatever was accumulated anonymously in
@@ -64,4 +72,17 @@ export async function migrateLocalProgressToCloud(localLevelProgress) {
       sameOdds: lp.lowestOddsSameHit ?? undefined,
     });
   }
+}
+
+// equipped_theme is a plain preference, not a race-sensitive metric like the
+// streak/score columns — a direct table read/write is fine, no RPC needed.
+export async function fetchEquippedTheme(userId) {
+  const { data, error } = await supabase.from("profiles").select("equipped_theme").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.equipped_theme ?? null;
+}
+
+export async function pushEquippedTheme(userId, themeId) {
+  const { error } = await supabase.from("profiles").update({ equipped_theme: themeId }).eq("id", userId);
+  if (error) console.error("pushEquippedTheme failed:", error.message);
 }

@@ -1,11 +1,13 @@
-import { C } from "../theme";
+import { useThemeTokens } from "../themes/ThemeContext";
 
 const TABS = [
   { id: "game", label: "Game" },
   { id: "leaderboard", label: "Leaderboard" },
+  { id: "unlocks", label: "Unlocks" },
 ];
 
 export function TabNav({ active, onChange }) {
+  const C = useThemeTokens();
   return (
     <div className="flex gap-2">
       {TABS.map((t) => (

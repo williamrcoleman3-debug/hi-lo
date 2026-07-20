@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadProgress, saveProgress, applyCorrectCall, selectLevel } from "../persistence/progress.js";
-import { fetchCloudLevelProgress, recordLevelProgressRemote, migrateLocalProgressToCloud } from "../persistence/cloudProgress.js";
+import { loadProgress, saveProgress, applyCorrectCall, selectLevel, selectTheme } from "../persistence/progress.js";
+import {
+  fetchCloudLevelProgress,
+  recordLevelProgressRemote,
+  migrateLocalProgressToCloud,
+  fetchEquippedTheme,
+  pushEquippedTheme,
+} from "../persistence/cloudProgress.js";
 import { getLevel, computeUnlockedLevels } from "../engine/levels.js";
+import { THEME_IDS, computeUnlockedThemes } from "../themes/registry.js";
 
 // `userId` is null for anonymous play (localStorage only, as in Phase 2) or
 // a signed-in user's id (localStorage stays the always-on optimistic cache,
@@ -26,11 +33,24 @@ export function useProgress(userId) {
       try {
         await migrateLocalProgressToCloud(progress.levelProgress);
         const cloudLevelProgress = await fetchCloudLevelProgress(userId);
+        const cloudEquippedTheme = await fetchEquippedTheme(userId);
         if (cancelled) return;
+
+        // The cloud's last-known equipped theme wins (it may reflect another
+        // device) — unless this is a fresh profile still on the default and
+        // the player had equipped something else anonymously, in which case
+        // that anonymous choice is what gets pushed up.
+        let equippedTheme = cloudEquippedTheme ?? THEME_IDS.CLASSIC;
+        if (progress.equippedTheme !== THEME_IDS.CLASSIC && cloudEquippedTheme === THEME_IDS.CLASSIC) {
+          equippedTheme = progress.equippedTheme;
+          await pushEquippedTheme(userId, equippedTheme);
+        }
+
         setProgress((p) => ({
           ...p,
           levelProgress: cloudLevelProgress,
           unlockedLevels: computeUnlockedLevels(cloudLevelProgress),
+          equippedTheme,
         }));
       } catch (err) {
         console.error("Cloud progress sync failed, staying on local progress:", err.message);
@@ -61,12 +81,25 @@ export function useProgress(userId) {
     setProgress((p) => selectLevel(p, levelId));
   }, []);
 
+  const setEquippedTheme = useCallback(
+    (themeId) => {
+      setProgress((p) => selectTheme(p, themeId, computeUnlockedThemes({ unlockedLevels: p.unlockedLevels })));
+      if (userId && computeUnlockedThemes({ unlockedLevels: progress.unlockedLevels }).includes(themeId)) {
+        pushEquippedTheme(userId, themeId);
+      }
+    },
+    [userId, progress.unlockedLevels]
+  );
+
   return {
     selectedLevel: progress.selectedLevel,
     selectedLevelConfig: getLevel(progress.selectedLevel),
     unlockedLevels: progress.unlockedLevels,
     levelProgress: progress.levelProgress,
+    equippedTheme: progress.equippedTheme,
+    unlockedThemeIds: computeUnlockedThemes({ unlockedLevels: progress.unlockedLevels }),
     recordCorrectCall,
     selectLevel: selectLevelById,
+    setEquippedTheme,
   };
 }

@@ -4,9 +4,26 @@
 -- profiles: one row per authenticated user, created on first sign-in.
 -- Username uniqueness is enforced case-insensitively (see the index below)
 -- so "Will" and "will" can't both exist as distinct, confusable usernames.
+--
+-- current_streak/longest_streak/last_banked_date track the account-wide
+-- (not per-level) daily banking streak — consecutive UTC calendar days on
+-- which the player banked at least once, on any level. Maintained only by
+-- record_run_end() below, computed from the server clock, never trusted
+-- from the client.
+--
+-- equipped_theme is a plain preference (last write wins, no concurrent
+-- arithmetic like the streak/score columns) — updated via a direct client
+-- update to this table, covered by the existing "update their own profile"
+-- policy below, no RPC needed. Which themes are UNLOCKED is never stored:
+-- it's derived from unlockedLevels (already synced via level_progress), so
+-- there's nothing here that could drift out of sync with level progress.
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   username text not null check (char_length(username) between 2 and 24),
+  current_streak integer not null default 0,
+  longest_streak integer not null default 0,
+  last_banked_date date,
+  equipped_theme text not null default 'classic',
   created_at timestamptz not null default now()
 );
 
@@ -76,19 +93,43 @@ create policy "leaderboard scores are publicly readable"
 -- this bypass RLS to perform the upsert, but it always operates on
 -- auth.uid() internally — never a client-supplied user id — so a caller can
 -- only ever affect their own row despite the function's elevated privilege.
-create or replace function public.record_run_end(
+--
+-- On an actual Bank (not a Bust), this also advances the account-wide daily
+-- streak, using the server's own clock (UTC calendar date) — never a
+-- client-reported date, which would be trivially fakeable. Same-day repeat
+-- banks are a no-op; a gap of exactly one day increments the streak; any
+-- bigger gap (or no prior record) resets it to 1 for today.
+--
+-- Returns whether this run's amount was a new personal peak for the level
+-- (Leaderboard B territory) — the share feature leans on this to pick
+-- peak-framed text over the default bank/bust text, without a separate
+-- client-side read-then-compare (which could race).
+drop function if exists public.record_run_end(text, bigint, boolean);
+
+create function public.record_run_end(
   p_level_id text,
   p_amount bigint,
   p_was_banked boolean
-) returns void
+) returns table (is_new_peak boolean)
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_today date := (now() at time zone 'utc')::date;
+  v_last date;
+  v_current int;
+  v_longest int;
+  v_gap int;
+  v_prev_peak bigint;
 begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+
+  select peak_score into v_prev_peak
+    from public.leaderboard_scores
+   where user_id = auth.uid() and level_id = p_level_id;
 
   insert into public.leaderboard_scores (user_id, level_id, cumulative_banked, peak_score, updated_at)
   values (
@@ -103,6 +144,30 @@ begin
       + (case when p_was_banked then p_amount else 0 end),
     peak_score = greatest(public.leaderboard_scores.peak_score, p_amount),
     updated_at = now();
+
+  if p_was_banked then
+    select last_banked_date, current_streak, longest_streak
+      into v_last, v_current, v_longest
+      from public.profiles
+     where id = auth.uid();
+
+    v_gap := case when v_last is null then null else v_today - v_last end;
+
+    if v_gap = 0 then
+      null; -- already banked today; streak unchanged
+    else
+      v_current := case when v_gap = 1 then coalesce(v_current, 0) + 1 else 1 end;
+      v_longest := greatest(coalesce(v_longest, 0), v_current);
+
+      update public.profiles
+         set current_streak = v_current,
+             longest_streak = v_longest,
+             last_banked_date = v_today
+       where id = auth.uid();
+    end if;
+  end if;
+
+  return query select (p_amount > coalesce(v_prev_peak, 0));
 end;
 $$;
 

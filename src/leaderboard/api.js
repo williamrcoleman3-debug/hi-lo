@@ -29,3 +29,26 @@ export async function fetchLeaderboard(levelId, board = "cumulative") {
     achievedAt: row.updated_at,
   }));
 }
+
+const STREAK_COLUMN_BY_BOARD = {
+  current: "current_streak",
+  longest: "longest_streak",
+};
+
+// Account-wide (not per-level) — resolves to [{ username, score }], best-first,
+// for "current" (Leaderboard C) or "longest" (Leaderboard D) streak.
+export async function fetchStreakLeaderboard(board = "current") {
+  if (!LEADERBOARD_BACKEND_READY) return [];
+
+  const column = STREAK_COLUMN_BY_BOARD[board];
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(`username, ${column}`)
+    .gt(column, 0)
+    .order(column, { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  return data.map((row) => ({ username: row.username, score: row[column] }));
+}

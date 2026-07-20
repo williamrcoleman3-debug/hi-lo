@@ -1,6 +1,7 @@
-import { C } from "../theme";
+import { useThemeTokens } from "../themes/ThemeContext";
 
 export function Card({ card, hidden, pop }) {
+  const C = useThemeTokens();
   if (!card || hidden) {
     return (
       <div

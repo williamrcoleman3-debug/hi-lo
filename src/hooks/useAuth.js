@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../supabase/client.js";
 
+const PROFILE_COLUMNS = "id, username, current_streak, longest_streak, last_banked_date";
+
 export function useAuth() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+
+  const fetchProfile = useCallback((userId) => {
+    return supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle();
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -22,16 +28,22 @@ export function useAuth() {
       return;
     }
     setLoading(true);
-    supabase
-      .from("profiles")
-      .select("id, username")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(({ data }) => {
-        setProfile(data);
-        setLoading(false);
-      });
-  }, [session?.user?.id]);
+    fetchProfile(userId).then(({ data }) => {
+      setProfile(data);
+      setLoading(false);
+    });
+  }, [session?.user?.id, fetchProfile]);
+
+  // Server-side state (streak, etc.) can change without a local action
+  // driving it through `session` — e.g. right after a Bank event updates
+  // profiles server-side. Call this to pull the latest without a full
+  // session round-trip.
+  const refreshProfile = useCallback(async () => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const { data } = await fetchProfile(userId);
+    setProfile(data);
+  }, [session?.user?.id, fetchProfile]);
 
   const sendCode = useCallback(
     (email) => supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } }),
@@ -49,7 +61,7 @@ export function useAuth() {
       const { data, error } = await supabase
         .from("profiles")
         .insert({ id: userId, username })
-        .select("id, username")
+        .select(PROFILE_COLUMNS)
         .single();
       if (!error) {
         setProfile(data);
@@ -77,5 +89,6 @@ export function useAuth() {
     verifyCode,
     createProfile,
     signOut,
+    refreshProfile,
   };
 }

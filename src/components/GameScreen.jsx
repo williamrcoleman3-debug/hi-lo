@@ -1,17 +1,26 @@
-import { C } from "../theme";
+import { useState } from "react";
+import { useThemeTokens } from "../themes/ThemeContext";
 import { HOUSE_EDGE, TIMER_MS, RANKS } from "../engine";
 import { useGame } from "../hooks/useGame";
-import { useProgress } from "../hooks/useProgress";
-import { useAuth } from "../hooks/useAuth";
 import { recordRunEndRemote } from "../persistence/cloudProgress";
+import { buildShareText, buildShareUrl, shareResult } from "../share/share";
 import { Card } from "./Card";
 import { ReferenceLadder } from "./ReferenceLadder";
 import { LevelSwitcher } from "./LevelSwitcher";
 
-export function GameScreen() {
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
-  const { selectedLevelConfig, unlockedLevels, levelProgress, recordCorrectCall, selectLevel } = useProgress(userId);
+export function GameScreen({
+  userId,
+  profile,
+  refreshProfile,
+  selectedLevelConfig,
+  unlockedLevels,
+  levelProgress,
+  recordCorrectCall,
+  selectLevel,
+}) {
+  const C = useThemeTokens();
+  const [isNewPeak, setIsNewPeak] = useState(false);
+  const [shareNotice, setShareNotice] = useState(null);
 
   const {
     deck,
@@ -37,8 +46,41 @@ export function GameScreen() {
     startNewGame,
   } = useGame(selectedLevelConfig, {
     onCorrectCall: recordCorrectCall,
-    onRunEnd: userId ? (levelId, { amount, wasBanked }) => recordRunEndRemote(levelId, amount, wasBanked) : undefined,
+    onRunEnd: userId
+      ? async (levelId, { amount, wasBanked }) => {
+          const result = await recordRunEndRemote(levelId, amount, wasBanked);
+          setIsNewPeak(result.isNewPeak);
+          // A Bank may have just advanced the daily streak server-side —
+          // pull the fresh value so the UI (and share text) is current.
+          if (wasBanked) refreshProfile();
+        }
+      : undefined,
   });
+
+  const handleStartNewGame = () => {
+    setIsNewPeak(false);
+    setShareNotice(null);
+    startNewGame();
+  };
+
+  const handleShare = async () => {
+    const text = buildShareText({
+      status,
+      amount: banked,
+      levelName: selectedLevelConfig.name,
+      currentStreak: profile?.current_streak ?? 0,
+      isNewPeak,
+    });
+    const url = buildShareUrl(profile?.username);
+    const result = await shareResult(text, url);
+    if (result === "copied") {
+      setShareNotice("Copied to clipboard!");
+      setTimeout(() => setShareNotice(null), 2000);
+    } else if (result === "unsupported") {
+      setShareNotice("Sharing isn't supported in this browser.");
+      setTimeout(() => setShareNotice(null), 2500);
+    }
+  };
 
   const shoeSize = selectedLevelConfig.suits.length * RANKS.length * selectedLevelConfig.deckCopies;
   const timerPct = Math.max(0, (timeLeft / TIMER_MS) * 100);
@@ -63,10 +105,7 @@ export function GameScreen() {
         <div
           className="pointer-events-none fixed inset-0 z-50"
           style={{
-            background:
-              flash === "win"
-                ? "radial-gradient(circle at 50% 30%, rgba(61,220,132,0.25), transparent 70%)"
-                : "radial-gradient(circle at 50% 30%, rgba(255,77,77,0.28), transparent 70%)",
+            background: flash === "win" ? C.winFlashOverlay : C.loseFlashOverlay,
             transition: "opacity 0.42s ease-out",
           }}
         />
@@ -116,177 +155,202 @@ export function GameScreen() {
         />
       </div>
 
-      <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-8">
-        {/* Table */}
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-6 mb-2">
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
-                current
-              </span>
-              <Card card={compareCard} />
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
-                next
-              </span>
-              <Card card={revealedCard} hidden={!revealedCard} pop={revealing || !!revealedCard} />
-            </div>
-          </div>
-
-          <div
-            className="text-[11px] uppercase tracking-widest mb-3"
-            style={{ color: C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}
-          >
-            {deck.length} cards left in the shoe · ante {selectedLevelConfig.ante.toLocaleString()}
-          </div>
-
-          {status === "playing" && !awaitingAdvance && (
-            <div className="w-full mb-4">
-              <div
-                className="w-full h-2 rounded-full overflow-hidden"
-                style={{ background: C.panel, border: `1px solid ${C.border}` }}
-              >
-                <div
-                  style={{
-                    width: `${timerPct}%`,
-                    height: "100%",
-                    background: timerColor,
-                    transition: "width 0.05s linear, background 0.2s ease",
-                  }}
-                />
+      {/* The table itself — this is what gets the wooden-rail frame in Poker
+          Table (tableFrameBorder/tableFrameShadow are "none" for Classic). */}
+      <div
+        className="w-full max-w-4xl p-4 sm:p-6"
+        style={{ border: C.tableFrameBorder, boxShadow: C.tableFrameShadow, borderRadius: 16 }}
+      >
+        <div className="w-full grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-8">
+          {/* Table */}
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-6 mb-2">
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
+                  current
+                </span>
+                <Card card={compareCard} />
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
+                  next
+                </span>
+                <Card card={revealedCard} hidden={!revealedCard} pop={revealing || !!revealedCard} />
               </div>
             </div>
-          )}
 
-          <div
-            className="w-full text-center rounded-xl px-4 py-3 mb-6 text-sm"
-            style={{ ...messageStyle, fontFamily: "'IBM Plex Mono', monospace" }}
-          >
-            {message}
+            <div
+              className="text-[11px] uppercase tracking-widest mb-3"
+              style={{ color: C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {deck.length} cards left in the shoe · ante {selectedLevelConfig.ante.toLocaleString()}
+            </div>
+
+            {status === "playing" && !awaitingAdvance && (
+              <div className="w-full mb-4">
+                <div
+                  className="w-full h-2 rounded-full overflow-hidden"
+                  style={{ background: C.panel, border: `1px solid ${C.border}` }}
+                >
+                  <div
+                    style={{
+                      width: `${timerPct}%`,
+                      height: "100%",
+                      background: timerColor,
+                      transition: "width 0.05s linear, background 0.2s ease",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div
+              className="w-full text-center rounded-xl px-4 py-3 mb-6 text-sm"
+              style={{ ...messageStyle, fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {message}
+            </div>
+
+            {/* Controls — priced per hand off the level's static baseline */}
+            {status === "playing" && !awaitingAdvance && (
+              <div className="w-full grid grid-cols-3 gap-3 mb-4">
+                <button
+                  onClick={() => makeCall("lower")}
+                  disabled={callDisabled(probs.pLower)}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ border: `2px solid ${C.teal}`, color: C.teal, background: "transparent" }}
+                >
+                  Lower
+                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                    {probs.pLower > 0 ? `${Math.round(probs.pLower * 100)}% · ×${growths.lower.toFixed(2)}` : "—"}
+                  </div>
+                </button>
+                <button
+                  onClick={() => makeCall("same")}
+                  disabled={callDisabled(probs.pSame)}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ border: `2px solid ${C.gold}`, color: C.gold, background: "transparent" }}
+                >
+                  Same
+                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                    {probs.pSame > 0 ? `${Math.round(probs.pSame * 100)}% · ×${growths.same.toFixed(2)}` : "—"}
+                  </div>
+                </button>
+                <button
+                  onClick={() => makeCall("higher")}
+                  disabled={callDisabled(probs.pHigher)}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ border: `2px solid ${C.ember}`, color: C.ember, background: "transparent" }}
+                >
+                  Higher
+                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                    {probs.pHigher > 0 ? `${Math.round(probs.pHigher * 100)}% · ×${growths.higher.toFixed(2)}` : "—"}
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {status === "playing" && !awaitingAdvance && (
+              <div className="w-full grid grid-cols-2 gap-3 mb-4">
+                <button
+                  onClick={() => makeCall("red")}
+                  disabled={callDisabled(probs.pRed)}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ border: `2px solid ${C.cardRed}`, color: C.cardRed, background: "transparent" }}
+                >
+                  Red
+                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                    {probs.pRed > 0 ? `${Math.round(probs.pRed * 100)}% · ×${growths.red.toFixed(2)}` : "—"}
+                  </div>
+                </button>
+                <button
+                  onClick={() => makeCall("black")}
+                  disabled={callDisabled(probs.pBlack)}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ border: `2px solid ${C.textPrimary}`, color: C.textPrimary, background: "transparent" }}
+                >
+                  Black
+                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                    {probs.pBlack > 0 ? `${Math.round(probs.pBlack * 100)}% · ×${growths.black.toFixed(2)}` : "—"}
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {status === "playing" && awaitingAdvance && (
+              <button
+                onClick={advanceRound}
+                className="w-full rounded-xl font-semibold py-3.5 transition-transform active:scale-95 mb-3"
+                style={{ background: C.win, color: "#0e0e12" }}
+              >
+                Skip →
+              </button>
+            )}
+
+            {status === "playing" && banked > 0 && (
+              <button
+                onClick={cashOut}
+                className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
+                style={{ background: C.gold, color: "#14161f" }}
+              >
+                Bank {banked.toLocaleString()} points
+              </button>
+            )}
+
+            {(status === "busted" || status === "cashed") && (
+              <>
+                {(status === "cashed" || banked > 0) && (
+                  <>
+                    <button
+                      onClick={handleShare}
+                      className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
+                      style={{ background: C.teal, color: "#0e0e12" }}
+                    >
+                      Share
+                    </button>
+                    {shareNotice && (
+                      <div className="w-full text-center text-xs mb-2" style={{ color: C.textMuted }}>
+                        {shareNotice}
+                      </div>
+                    )}
+                  </>
+                )}
+                <button
+                  onClick={handleStartNewGame}
+                  className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95"
+                  style={{ border: `2px solid ${C.borderStrong}`, color: C.textPrimary, background: "transparent" }}
+                >
+                  Start new run
+                </button>
+              </>
+            )}
           </div>
 
-          {/* Controls — priced per hand off the level's static baseline */}
-          {status === "playing" && !awaitingAdvance && (
-            <div className="w-full grid grid-cols-3 gap-3 mb-4">
-              <button
-                onClick={() => makeCall("lower")}
-                disabled={callDisabled(probs.pLower)}
-                className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                style={{ border: `2px solid ${C.teal}`, color: C.teal, background: "transparent" }}
-              >
-                Lower
-                <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
-                  {probs.pLower > 0 ? `${Math.round(probs.pLower * 100)}% · ×${growths.lower.toFixed(2)}` : "—"}
-                </div>
-              </button>
-              <button
-                onClick={() => makeCall("same")}
-                disabled={callDisabled(probs.pSame)}
-                className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                style={{ border: `2px solid ${C.gold}`, color: C.gold, background: "transparent" }}
-              >
-                Same
-                <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
-                  {probs.pSame > 0 ? `${Math.round(probs.pSame * 100)}% · ×${growths.same.toFixed(2)}` : "—"}
-                </div>
-              </button>
-              <button
-                onClick={() => makeCall("higher")}
-                disabled={callDisabled(probs.pHigher)}
-                className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                style={{ border: `2px solid ${C.ember}`, color: C.ember, background: "transparent" }}
-              >
-                Higher
-                <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
-                  {probs.pHigher > 0 ? `${Math.round(probs.pHigher * 100)}% · ×${growths.higher.toFixed(2)}` : "—"}
-                </div>
-              </button>
-            </div>
-          )}
-
-          {status === "playing" && !awaitingAdvance && (
-            <div className="w-full grid grid-cols-2 gap-3 mb-4">
-              <button
-                onClick={() => makeCall("red")}
-                disabled={callDisabled(probs.pRed)}
-                className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                style={{ border: `2px solid ${C.cardRed}`, color: C.cardRed, background: "transparent" }}
-              >
-                Red
-                <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
-                  {probs.pRed > 0 ? `${Math.round(probs.pRed * 100)}% · ×${growths.red.toFixed(2)}` : "—"}
-                </div>
-              </button>
-              <button
-                onClick={() => makeCall("black")}
-                disabled={callDisabled(probs.pBlack)}
-                className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                style={{ border: `2px solid ${C.textPrimary}`, color: C.textPrimary, background: "transparent" }}
-              >
-                Black
-                <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
-                  {probs.pBlack > 0 ? `${Math.round(probs.pBlack * 100)}% · ×${growths.black.toFixed(2)}` : "—"}
-                </div>
-              </button>
-            </div>
-          )}
-
-          {status === "playing" && awaitingAdvance && (
-            <button
-              onClick={advanceRound}
-              className="w-full rounded-xl font-semibold py-3.5 transition-transform active:scale-95 mb-3"
-              style={{ background: C.win, color: "#0e0e12" }}
+          {/* Ladder + stats */}
+          <div className="flex flex-col items-center gap-4">
+            <ReferenceLadder streak={streak} justClimbed={justClimbed} ante={selectedLevelConfig.ante} />
+            <div
+              className="w-full flex flex-col gap-2 text-xs pt-3"
+              style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}
             >
-              Skip →
-            </button>
-          )}
-
-          {status === "playing" && banked > 0 && (
-            <button
-              onClick={cashOut}
-              className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
-              style={{ background: C.gold, color: "#14161f" }}
-            >
-              Bank {banked.toLocaleString()} points
-            </button>
-          )}
-
-          {(status === "busted" || status === "cashed") && (
-            <button
-              onClick={startNewGame}
-              className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95"
-              style={{ border: `2px solid ${C.borderStrong}`, color: C.textPrimary, background: "transparent" }}
-            >
-              Start new run
-            </button>
-          )}
-        </div>
-
-        {/* Ladder + stats */}
-        <div className="flex flex-col items-center gap-4">
-          <ReferenceLadder streak={streak} justClimbed={justClimbed} ante={selectedLevelConfig.ante} />
-          <div
-            className="w-full flex flex-col gap-2 text-xs pt-3"
-            style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}
-          >
-            <div className="flex justify-between">
-              <span>cards left</span>
-              <span style={{ color: C.textPrimary }}>{deck.length} / {shoeSize}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>streak</span>
-              <span className={justClimbed ? "streak-punch" : ""} style={{ color: C.textPrimary }}>
-                {streak}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>at risk</span>
-              <span style={{ color: C.gold }}>{banked.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>house edge</span>
-              <span style={{ color: C.textPrimary }}>{Math.round(HOUSE_EDGE * 100)}% · every call</span>
+              <div className="flex justify-between">
+                <span>cards left</span>
+                <span style={{ color: C.textPrimary }}>{deck.length} / {shoeSize}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>streak</span>
+                <span className={justClimbed ? "streak-punch" : ""} style={{ color: C.textPrimary }}>
+                  {streak}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>at risk</span>
+                <span style={{ color: C.gold }}>{banked.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>house edge</span>
+                <span style={{ color: C.textPrimary }}>{Math.round(HOUSE_EDGE * 100)}% · every call</span>
+              </div>
             </div>
           </div>
         </div>

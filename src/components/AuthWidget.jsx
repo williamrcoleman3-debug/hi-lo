@@ -1,14 +1,9 @@
 import { useState } from "react";
-import { C } from "../theme";
+import { useThemeTokens } from "../themes/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
 
-const inputStyle = {
-  border: `1px solid ${C.border}`,
-  background: C.bg,
-  color: C.textPrimary,
-};
-
 function Modal({ title, onClose, children }) {
+  const C = useThemeTokens();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <div
@@ -32,6 +27,8 @@ function Modal({ title, onClose, children }) {
 }
 
 export function AuthWidget() {
+  const C = useThemeTokens();
+  const inputStyle = { border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary };
   const { isSupabaseConfigured, user, profile, loading, sendCode, verifyCode, createProfile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState("email"); // "email" | "code" | null (mid-verify)
@@ -89,6 +86,11 @@ export function AuthWidget() {
     return (
       <div className="flex items-center gap-3 text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
         <span style={{ color: C.textSecondary }}>{profile.username}</span>
+        {profile.current_streak > 0 && (
+          <span style={{ color: C.gold }} title={`${profile.current_streak}-day banking streak`}>
+            🔥{profile.current_streak}
+          </span>
+        )}
         <button onClick={() => signOut()} style={{ color: C.textMuted }} className="underline">
           Sign out
         </button>

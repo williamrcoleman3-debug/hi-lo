@@ -1,7 +1,8 @@
-import { C } from "../theme";
+import { useThemeTokens } from "../themes/ThemeContext";
 import { AVG_REFERENCE } from "../engine";
 
 export function ReferenceLadder({ streak, justClimbed, ante }) {
+  const C = useThemeTokens();
   const rungs = Array.from({ length: 8 }, (_, i) => i + 1);
   const scale = ante / 100; // AVG_REFERENCE is tabulated at a 100-point ante; scales proportionally
   return (
@@ -14,7 +15,7 @@ export function ReferenceLadder({ streak, justClimbed, ante }) {
         const style = lit
           ? { border: `1px solid ${C.gold}`, background: C.goldSoft, color: C.gold }
           : isNext
-          ? { border: `1px solid rgba(212,175,106,0.5)`, color: "rgba(212,175,106,0.8)" }
+          ? { border: `1px solid ${C.gold}`, color: C.gold } // animate-pulse below handles the dimmed "not lit yet" feel
           : { border: `1px solid ${C.border}`, color: C.textMuted };
         return (
           <div

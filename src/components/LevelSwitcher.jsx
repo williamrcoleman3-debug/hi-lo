@@ -1,7 +1,8 @@
-import { C } from "../theme";
+import { useThemeTokens } from "../themes/ThemeContext";
 import { LEVELS, UNLOCK_REQUIREMENTS } from "../engine";
 
 export function LevelSwitcher({ selectedLevel, unlockedLevels, levelProgress, onSelect }) {
+  const C = useThemeTokens();
   return (
     <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
       {LEVELS.map((level) => {

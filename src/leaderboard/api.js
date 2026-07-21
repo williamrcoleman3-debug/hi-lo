@@ -28,34 +28,27 @@ export async function fetchLeaderboard(deckId) {
 }
 
 // Hands Won in a Row — Single Deck only, the primary/contest-tracked board.
-// Reads the leaderboard_single_deck_win_streak view (see supabase/schema.sql),
-// which already excludes is_contest_banned users.
+// Calls the get_single_deck_win_streak_leaderboard() RPC (see
+// supabase/schema.sql) — a SECURITY DEFINER function rather than a view,
+// so the RLS-bypass needed to show every player's data is explicit and
+// audit-friendly, not a silent view property. Already excludes
+// is_contest_banned users and caps at 25 server-side.
 export async function fetchSingleDeckWinStreakLeaderboard() {
   if (!LEADERBOARD_BACKEND_READY) return [];
 
-  const { data, error } = await supabase
-    .from("leaderboard_single_deck_win_streak")
-    .select("username, best_win_streak, updated_at")
-    .order("best_win_streak", { ascending: false })
-    .limit(LEADERBOARD_DEPTH);
-
+  const { data, error } = await supabase.rpc("get_single_deck_win_streak_leaderboard");
   if (error) throw error;
 
   return data.map((row) => ({ username: row.username, score: row.best_win_streak, achievedAt: row.updated_at }));
 }
 
 // Total Hands Won — combined across all four decks (a raw count, safe to
-// combine unlike the deck-scaled token score). Reads the
-// leaderboard_total_hands_won view.
+// combine unlike the deck-scaled token score). Calls the
+// get_total_hands_won_leaderboard() RPC, same SECURITY DEFINER pattern.
 export async function fetchTotalHandsWonLeaderboard() {
   if (!LEADERBOARD_BACKEND_READY) return [];
 
-  const { data, error } = await supabase
-    .from("leaderboard_total_hands_won")
-    .select("username, total_hands_won")
-    .order("total_hands_won", { ascending: false })
-    .limit(LEADERBOARD_DEPTH);
-
+  const { data, error } = await supabase.rpc("get_total_hands_won_leaderboard");
   if (error) throw error;
 
   return data.map((row) => ({ username: row.username, score: row.total_hands_won }));

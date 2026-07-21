@@ -406,36 +406,58 @@ grant execute on function public.use_lifeline() to authenticated;
 
 -- Leaderboard 1 (primary, contest-tracked): best-ever Win Streak on Single
 -- Deck only — 51 consecutive correct hands clears the contest record.
--- Excludes is_contest_banned users (Phase 4 enforcement) — a view, not RLS,
--- since it deliberately exposes a public projection of otherwise-private
--- deck_progress rows (username + streak only, nothing else). Views default
--- to the definer's privileges (not the querying user's), so this bypasses
--- deck_progress's own-row-only RLS by design, the same way a public
--- leaderboard needs to.
-create view public.leaderboard_single_deck_win_streak as
-select p.username, dp.best_win_streak, dp.updated_at
-  from public.deck_progress dp
-  join public.profiles p on p.id = dp.user_id
- where dp.deck_id = 'single-deck'
-   and dp.best_win_streak > 0
-   and p.is_contest_banned = false
- order by dp.best_win_streak desc;
+-- Excludes is_contest_banned users (Phase 4 enforcement).
+--
+-- Deliberately a SECURITY DEFINER FUNCTION, not a bare view — both bypass
+-- deck_progress's own-row-only RLS the same way (necessary: a public
+-- leaderboard has to show everyone's data, not just the querying user's
+-- row), but a view doing this silently is exactly what Supabase's security
+-- linter flags as fragile — anyone editing the view later (e.g. widening
+-- its select list) would keep bypassing RLS with no explicit signal. A
+-- function makes the intentional bypass explicit and keeps its exposed
+-- columns fixed by its RETURNS TABLE signature.
+create function public.get_single_deck_win_streak_leaderboard()
+returns table (username text, best_win_streak integer, updated_at timestamptz)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select p.username, dp.best_win_streak, dp.updated_at
+    from public.deck_progress dp
+    join public.profiles p on p.id = dp.user_id
+   where dp.deck_id = 'single-deck'
+     and dp.best_win_streak > 0
+     and p.is_contest_banned = false
+   order by dp.best_win_streak desc
+   limit 25;
+$$;
 
-grant select on public.leaderboard_single_deck_win_streak to anon, authenticated;
+revoke all on function public.get_single_deck_win_streak_leaderboard() from public;
+grant execute on function public.get_single_deck_win_streak_leaderboard() to anon, authenticated;
 
 -- Leaderboard 2: lifetime hands won, summed across all four decks — safe to
 -- combine since it's a raw count, not a deck-scaled currency. Not affected
 -- by is_contest_banned (that exclusion is Single Deck Win Streak only).
-create view public.leaderboard_total_hands_won as
-select p.username, sum(dp.hands_won) as total_hands_won
-  from public.deck_progress dp
-  join public.profiles p on p.id = dp.user_id
- group by p.id, p.username
-having sum(dp.hands_won) > 0
- order by total_hands_won desc;
+create function public.get_total_hands_won_leaderboard()
+returns table (username text, total_hands_won bigint)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select p.username, sum(dp.hands_won) as total_hands_won
+    from public.deck_progress dp
+    join public.profiles p on p.id = dp.user_id
+   group by p.id, p.username
+  having sum(dp.hands_won) > 0
+   order by total_hands_won desc
+   limit 25;
+$$;
 
-grant select on public.leaderboard_total_hands_won to anon, authenticated;
+revoke all on function public.get_total_hands_won_leaderboard() from public;
+grant execute on function public.get_total_hands_won_leaderboard() to anon, authenticated;
 
 -- Leaderboard 3 (Total Token Score, per deck) reuses the existing
 -- leaderboard_scores.cumulative_banked column/table directly — no new
--- view needed, just a differently-scoped query client-side.
+-- function needed, just a differently-scoped query client-side.

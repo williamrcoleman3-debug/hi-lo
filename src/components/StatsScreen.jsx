@@ -10,6 +10,7 @@ export function StatsScreen({ userId, profile }) {
 
   useEffect(() => {
     if (!userId) {
+      setDeckStats(null);
       setLoading(false);
       return;
     }
@@ -54,7 +55,11 @@ export function StatsScreen({ userId, profile }) {
         <div className="w-full max-w-4xl rounded-xl p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.lose }}>
           Couldn't load your stats ({loadError}).
         </div>
-      ) : loading ? (
+      ) : loading || !deckStats ? (
+        // Gated on `!deckStats` too, not just `loading` — `userId` can turn
+        // truthy (once auth resolves) a render before this effect has had a
+        // chance to flip `loading` back to true, and deckStats is the only
+        // value that's actually never stale at that moment.
         <div className="w-full max-w-4xl rounded-xl p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
           Loading…
         </div>

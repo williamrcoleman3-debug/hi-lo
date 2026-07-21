@@ -19,8 +19,8 @@ export const HOUSE_EDGE = 0.01; // 1% — applied uniformly to every call via tr
 
 // Illustrative-only reference curve, computed at the *average* optimal-call
 // win rate (~72.4%) across all 13 ranks, at a 100-point ante. Real payout is
-// priced per hand off the level's static baseline odds — this is just a
-// rough "what to expect" guide. Scale by (level.ante / 100) for other levels
+// priced per hand off the deck's static baseline odds — this is just a
+// rough "what to expect" guide. Scale by (deck.ante / 100) for other decks
 // — ante scaling is confirmed proportional, so the curve scales with it.
 export const AVG_REFERENCE = [100, 37, 50, 69, 94, 128, 176, 240, 329, 449];
 

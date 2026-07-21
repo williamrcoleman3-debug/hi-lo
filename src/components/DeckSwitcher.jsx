@@ -1,14 +1,15 @@
 import { useThemeTokens } from "../themes/ThemeContext";
-import { LEVELS, UNLOCK_REQUIREMENTS } from "../engine";
+import { DECKS, UNLOCK_REQUIREMENTS, RANKS } from "../engine";
 
-export function LevelSwitcher({ selectedLevel, unlockedLevels, levelProgress, onSelect }) {
+export function DeckSwitcher({ selectedDeck, unlockedDecks, deckProgress, onSelect }) {
   const C = useThemeTokens();
   return (
     <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-      {LEVELS.map((level) => {
-        const unlocked = unlockedLevels.includes(level.id);
-        const selected = level.id === selectedLevel;
-        const requirement = UNLOCK_REQUIREMENTS[level.id];
+      {DECKS.map((deck) => {
+        const unlocked = unlockedDecks.includes(deck.id);
+        const selected = deck.id === selectedDeck;
+        const requirement = UNLOCK_REQUIREMENTS[deck.id];
+        const cardCount = deck.suits.length * RANKS.length * deck.deckCopies;
 
         const style = selected
           ? { border: `2px solid ${C.gold}`, background: C.goldSoft, color: C.gold }
@@ -18,25 +19,25 @@ export function LevelSwitcher({ selectedLevel, unlockedLevels, levelProgress, on
 
         return (
           <button
-            key={level.id}
-            onClick={() => unlocked && onSelect(level.id)}
+            key={deck.id}
+            onClick={() => unlocked && onSelect(deck.id)}
             disabled={!unlocked}
             title={!unlocked ? requirement?.description : undefined}
             className="rounded-xl px-3 py-2 text-left transition-transform active:scale-95 disabled:cursor-not-allowed"
             style={style}
           >
             <div className="flex items-center justify-between text-sm font-semibold">
-              <span>{level.name}</span>
+              <span>{deck.name}</span>
               {!unlocked && <span aria-hidden="true">🔒</span>}
             </div>
             <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
-              ante {level.ante.toLocaleString()}
+              ante {deck.ante.toLocaleString()} · {cardCount} cards
             </div>
             {!unlocked && requirement && (
               <div className="text-[10px] mt-1 leading-snug" style={{ color: C.textMuted }}>
                 {requirement.description}
                 {" — "}
-                {levelProgress[LEVELS[LEVELS.findIndex((l) => l.id === level.id) - 1].id].bestStreak}/10 best streak
+                {deckProgress[DECKS[DECKS.findIndex((d) => d.id === deck.id) - 1].id].bestWinStreak}/10 best win streak
               </div>
             )}
           </button>

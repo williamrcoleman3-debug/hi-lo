@@ -15,14 +15,14 @@ export function calcProbs(deck, curVal) {
   return { pHigher: higher / N, pLower: lower / N, pSame: same / N, pRed: red / N, pBlack: black / N, N };
 }
 
-// Odds as if the shoe were freshly reshuffled and full for this level, given
+// Odds as if the shoe were freshly reshuffled and full for this deck, given
 // only the rank/suit of the card currently in play — never the actual
 // remaining deck. This is the number a player sees and is priced against;
 // the gap between it and calcProbs (the real remaining odds) is the skill
 // a counting player can exploit. Pure: depends only on the one card in hand
-// and the level's composition (suits + deckCopies), not on deck/discard state.
-export function calcBaselineProbs(compareCard, levelConfig) {
-  const { suits, deckCopies } = levelConfig;
+// and the deck's composition (suits + deckCopies), not on deck/discard state.
+export function calcBaselineProbs(compareCard, deckConfig) {
+  const { suits, deckCopies } = deckConfig;
   const totalCards = suits.length * RANKS.length * deckCopies;
   let higher = 0, lower = 0, same = 0, red = 0, black = 0;
 
@@ -49,9 +49,9 @@ export function calcBaselineProbs(compareCard, levelConfig) {
 
 // Dispatches to the odds source that should drive display, payout, and
 // button-disabling for the given pricing mode.
-export function getActiveProbs(mode, { deck, compareCard, levelConfig }) {
+export function getActiveProbs(mode, { deck, compareCard, deckConfig }) {
   if (mode === PRICING_MODE.TRUE_LIVE_ODDS) return calcProbs(deck, compareCard.rank.value);
-  return calcBaselineProbs(compareCard, levelConfig);
+  return calcBaselineProbs(compareCard, deckConfig);
 }
 
 export function probForCall(probs, call) {

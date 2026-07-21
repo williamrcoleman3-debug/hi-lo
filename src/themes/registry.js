@@ -66,10 +66,10 @@ export const THEMES = [
     id: THEME_IDS.POKER_TABLE,
     name: "Poker Table",
     preview: { colors: ["#1c5b43", "#4a2c1a", "#f2c96b"] },
-    // Piggybacks directly on the existing Level 3 unlock condition — one
-    // achievement (10-streak + Same + Red/Black at Level 2), two rewards.
-    isUnlocked: (ctx) => ctx.unlockedLevels.includes("full-deck"),
-    unlockDescription: "Unlocks at Full Deck",
+    // Piggybacks directly on the existing Single Deck unlock condition — one
+    // achievement (10-hand win streak + Same + Red/Black at Double Suit), two rewards.
+    isUnlocked: (ctx) => ctx.unlockedDecks.includes("single-deck"),
+    unlockDescription: "Unlocks at Single Deck",
     tokens: pokerTableTokens,
   },
 ];

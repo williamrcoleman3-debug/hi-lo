@@ -2,31 +2,33 @@ import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { HOUSE_EDGE, TIMER_MS, RANKS } from "../engine";
 import { useGame } from "../hooks/useGame";
-import { recordRunEndRemote } from "../persistence/cloudProgress";
+import { recordGameEndRemote } from "../persistence/cloudProgress";
 import { buildShareText, buildShareUrl, shareResult } from "../share/share";
+import { redeemLifeline, useLifelineRemote, LIFELINE_COST_TOKENS } from "../lifelines/lifelines.js";
 import { Card } from "./Card";
 import { ReferenceLadder } from "./ReferenceLadder";
-import { LevelSwitcher } from "./LevelSwitcher";
+import { DeckSwitcher } from "./DeckSwitcher";
 
 export function GameScreen({
   userId,
   profile,
   refreshProfile,
-  selectedLevelConfig,
-  unlockedLevels,
-  levelProgress,
+  selectedDeckConfig,
+  unlockedDecks,
+  deckProgress,
   recordCorrectCall,
-  selectLevel,
+  selectDeck,
 }) {
   const C = useThemeTokens();
   const [isNewPeak, setIsNewPeak] = useState(false);
   const [shareNotice, setShareNotice] = useState(null);
+  const [lifelineNotice, setLifelineNotice] = useState(null);
 
   const {
     deck,
     compareCard,
     revealedCard,
-    streak,
+    winStreak,
     banked,
     totalTokens,
     status,
@@ -41,18 +43,28 @@ export function GameScreen({
     probs,
     growths,
     makeCall,
-    advanceRound,
+    advanceHand,
     cashOut,
     startNewGame,
-  } = useGame(selectedLevelConfig, {
+    useLifeline,
+    declineLifeline,
+  } = useGame(selectedDeckConfig, {
     onCorrectCall: recordCorrectCall,
-    onRunEnd: userId
-      ? async (levelId, { amount, wasBanked }) => {
-          const result = await recordRunEndRemote(levelId, amount, wasBanked);
+    onGameEnd: userId
+      ? async (deckId, { amount, wasBanked }) => {
+          const result = await recordGameEndRemote(deckId, amount, wasBanked);
           setIsNewPeak(result.isNewPeak);
           // A Bank may have just advanced the daily streak server-side —
           // pull the fresh value so the UI (and share text) is current.
           if (wasBanked) refreshProfile();
+        }
+      : undefined,
+    lifelineBalance: profile?.lifeline_balance ?? 0,
+    onUseLifeline: userId
+      ? async () => {
+          const result = await useLifelineRemote();
+          if (result.success) refreshProfile();
+          return result;
         }
       : undefined,
   });
@@ -63,12 +75,23 @@ export function GameScreen({
     startNewGame();
   };
 
+  const handleRedeemLifeline = async () => {
+    const result = await redeemLifeline();
+    if (result.success) {
+      refreshProfile();
+      setLifelineNotice("Lifeline redeemed!");
+    } else {
+      setLifelineNotice(`Need ${LIFELINE_COST_TOKENS.toLocaleString()} tokens to redeem a lifeline.`);
+    }
+    setTimeout(() => setLifelineNotice(null), 2500);
+  };
+
   const handleShare = async () => {
     const text = buildShareText({
       status,
       amount: banked,
-      levelName: selectedLevelConfig.name,
-      currentStreak: profile?.current_streak ?? 0,
+      deckName: selectedDeckConfig.name,
+      dailyStreak: profile?.current_streak ?? 0,
       isNewPeak,
     });
     const url = buildShareUrl(profile?.username);
@@ -82,7 +105,7 @@ export function GameScreen({
     }
   };
 
-  const shoeSize = selectedLevelConfig.suits.length * RANKS.length * selectedLevelConfig.deckCopies;
+  const shoeSize = selectedDeckConfig.suits.length * RANKS.length * selectedDeckConfig.deckCopies;
   const timerPct = Math.max(0, (timeLeft / TIMER_MS) * 100);
   const timerColor = timerPct > 50 ? C.teal : timerPct > 20 ? C.gold : C.lose;
 
@@ -133,7 +156,7 @@ export function GameScreen({
             Higher · Lower <span style={{ color: C.gold }}>· Same</span>
           </h1>
           <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
-            Payouts are priced off a fresh shoe, not the one in front of you. One miss — or one hesitation — wipes the run.
+            Payouts are priced off a fresh shoe, not the one in front of you. One miss — or one hesitation — wipes the game.
           </p>
         </div>
         <div className="text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -143,15 +166,33 @@ export function GameScreen({
           <div className="text-2xl font-semibold" style={{ color: C.gold }}>
             {totalTokens.toLocaleString()}
           </div>
+          {userId && (
+            <div className="mt-1 flex items-center justify-end gap-2 text-xs">
+              <span style={{ color: C.textMuted }}>🛟 {profile?.lifeline_balance ?? 0} lifeline{profile?.lifeline_balance === 1 ? "" : "s"}</span>
+              <button
+                onClick={handleRedeemLifeline}
+                className="underline"
+                style={{ color: C.teal }}
+                title={`Redeem ${LIFELINE_COST_TOKENS.toLocaleString()} tokens for 1 lifeline`}
+              >
+                redeem
+              </button>
+            </div>
+          )}
+          {lifelineNotice && (
+            <div className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>
+              {lifelineNotice}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="w-full max-w-4xl">
-        <LevelSwitcher
-          selectedLevel={selectedLevelConfig.id}
-          unlockedLevels={unlockedLevels}
-          levelProgress={levelProgress}
-          onSelect={selectLevel}
+        <DeckSwitcher
+          selectedDeck={selectedDeckConfig.id}
+          unlockedDecks={unlockedDecks}
+          deckProgress={deckProgress}
+          onSelect={selectDeck}
         />
       </div>
 
@@ -183,7 +224,7 @@ export function GameScreen({
               className="text-[11px] uppercase tracking-widest mb-3"
               style={{ color: C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}
             >
-              {deck.length} cards left in the shoe · ante {selectedLevelConfig.ante.toLocaleString()}
+              {deck.length} cards left in the shoe · ante {selectedDeckConfig.ante.toLocaleString()}
             </div>
 
             {status === "playing" && !awaitingAdvance && (
@@ -211,7 +252,7 @@ export function GameScreen({
               {message}
             </div>
 
-            {/* Controls — priced per hand off the level's static baseline */}
+            {/* Controls — priced per hand off the deck's static baseline */}
             {status === "playing" && !awaitingAdvance && (
               <div className="w-full grid grid-cols-3 gap-3 mb-4">
                 <button
@@ -277,9 +318,28 @@ export function GameScreen({
               </div>
             )}
 
+            {status === "lifeline-offer" && (
+              <div className="w-full grid grid-cols-2 gap-3 mb-4">
+                <button
+                  onClick={useLifeline}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95"
+                  style={{ background: C.teal, color: "#0e0e12" }}
+                >
+                  🛟 Use lifeline
+                </button>
+                <button
+                  onClick={declineLifeline}
+                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95"
+                  style={{ border: `2px solid ${C.borderStrong}`, color: C.textPrimary, background: "transparent" }}
+                >
+                  No, bust
+                </button>
+              </div>
+            )}
+
             {status === "playing" && awaitingAdvance && (
               <button
-                onClick={advanceRound}
+                onClick={advanceHand}
                 className="w-full rounded-xl font-semibold py-3.5 transition-transform active:scale-95 mb-3"
                 style={{ background: C.win, color: "#0e0e12" }}
               >
@@ -320,7 +380,7 @@ export function GameScreen({
                   className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95"
                   style={{ border: `2px solid ${C.borderStrong}`, color: C.textPrimary, background: "transparent" }}
                 >
-                  Start new run
+                  Start new game
                 </button>
               </>
             )}
@@ -328,7 +388,7 @@ export function GameScreen({
 
           {/* Ladder + stats */}
           <div className="flex flex-col items-center gap-4">
-            <ReferenceLadder streak={streak} justClimbed={justClimbed} ante={selectedLevelConfig.ante} />
+            <ReferenceLadder winStreak={winStreak} justClimbed={justClimbed} ante={selectedDeckConfig.ante} />
             <div
               className="w-full flex flex-col gap-2 text-xs pt-3"
               style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}
@@ -338,9 +398,9 @@ export function GameScreen({
                 <span style={{ color: C.textPrimary }}>{deck.length} / {shoeSize}</span>
               </div>
               <div className="flex justify-between">
-                <span>streak</span>
+                <span>win streak</span>
                 <span className={justClimbed ? "streak-punch" : ""} style={{ color: C.textPrimary }}>
-                  {streak}
+                  {winStreak}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -363,7 +423,7 @@ export function GameScreen({
         what's gone, you can spot when the real odds beat the price on the button. A call is greyed out
         only when it's structurally impossible (e.g. calling "Higher" on an Ace) — a call that's actually
         dead because of what's been dealt still lights up. Bank your points anytime to lock in your score
-        for this run.
+        for this game.
       </p>
     </div>
   );

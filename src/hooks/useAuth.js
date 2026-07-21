@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../supabase/client.js";
+import { consumePendingReferral } from "../referral/referral.js";
 
-const PROFILE_COLUMNS = "id, username, current_streak, longest_streak, last_banked_date";
+const PROFILE_COLUMNS =
+  "id, username, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -34,10 +36,10 @@ export function useAuth() {
     });
   }, [session?.user?.id, fetchProfile]);
 
-  // Server-side state (streak, etc.) can change without a local action
-  // driving it through `session` — e.g. right after a Bank event updates
-  // profiles server-side. Call this to pull the latest without a full
-  // session round-trip.
+  // Server-side state (streak, lifeline balance, etc.) can change without a
+  // local action driving it through `session` — e.g. right after a Bank
+  // event updates profiles server-side. Call this to pull the latest
+  // without a full session round-trip.
   const refreshProfile = useCallback(async () => {
     const userId = session?.user?.id;
     if (!userId) return;
@@ -73,6 +75,16 @@ export function useAuth() {
         .single();
       if (!error) {
         setProfile(data);
+        // Best-effort — a failed/absent referral attribution shouldn't
+        // block signup. Attempted at most once per signup regardless.
+        const pendingReferrer = consumePendingReferral();
+        if (pendingReferrer) {
+          try {
+            await supabase.rpc("attribute_referral", { p_referrer_username: pendingReferrer });
+          } catch (err) {
+            console.error("attribute_referral failed:", err.message);
+          }
+        }
         return { data, error: null };
       }
       // 23505 = unique_violation (the case-insensitive index on username) —

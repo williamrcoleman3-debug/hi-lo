@@ -1,7 +1,7 @@
 import { useThemeTokens } from "../themes/ThemeContext";
 import { AVG_REFERENCE } from "../engine";
 
-export function ReferenceLadder({ streak, justClimbed, ante }) {
+export function ReferenceLadder({ winStreak, justClimbed, ante }) {
   const C = useThemeTokens();
   const rungs = Array.from({ length: 8 }, (_, i) => i + 1);
   const scale = ante / 100; // AVG_REFERENCE is tabulated at a 100-point ante; scales proportionally
@@ -9,9 +9,9 @@ export function ReferenceLadder({ streak, justClimbed, ante }) {
     <div className="flex flex-col-reverse gap-1.5">
       {rungs.map((r) => {
         const val = Math.round(AVG_REFERENCE[Math.min(r - 1, AVG_REFERENCE.length - 1)] * scale);
-        const lit = r <= streak;
-        const isNext = r === streak + 1;
-        const isJustLit = r === streak && justClimbed;
+        const lit = r <= winStreak;
+        const isNext = r === winStreak + 1;
+        const isJustLit = r === winStreak && justClimbed;
         const style = lit
           ? { border: `1px solid ${C.gold}`, background: C.goldSoft, color: C.gold }
           : isNext

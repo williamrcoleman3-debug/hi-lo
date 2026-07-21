@@ -3,4 +3,4 @@ export * from "./deck.js";
 export * from "./odds.js";
 export * from "./payout.js";
 export * from "./round.js";
-export * from "./levels.js";
+export * from "./decks.js";

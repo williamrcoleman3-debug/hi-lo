@@ -1,22 +1,22 @@
 // Pure text-building logic, kept separate from the DOM/share-sheet
 // mechanics below so the copy can be reasoned about (and eventually tested)
 // without a browser.
-export function buildShareText({ status, amount, levelName, currentStreak, isNewPeak }) {
+export function buildShareText({ status, amount, deckName, dailyStreak, isNewPeak }) {
   const wasBanked = status === "cashed";
 
   if (isNewPeak) {
     return wasBanked
-      ? `New peak: ${amount.toLocaleString()} points on ${levelName} in Higher · Lower · Same — think you can top it?`
-      : `New peak: ${amount.toLocaleString()} points on ${levelName} before busting — think you can top it?`;
+      ? `New peak: ${amount.toLocaleString()} points on ${deckName} in Higher · Lower · Same — think you can top it?`
+      : `New peak: ${amount.toLocaleString()} points on ${deckName} before busting — think you can top it?`;
   }
 
   if (wasBanked) {
-    return currentStreak > 1
-      ? `Day ${currentStreak} streak — just banked ${amount.toLocaleString()} on ${levelName}. Beat it?`
-      : `Just banked ${amount.toLocaleString()} on ${levelName} in Higher · Lower · Same. Beat it?`;
+    return dailyStreak > 1
+      ? `Day ${dailyStreak} streak — just banked ${amount.toLocaleString()} on ${deckName}. Beat it?`
+      : `Just banked ${amount.toLocaleString()} on ${deckName} in Higher · Lower · Same. Beat it?`;
   }
 
-  return `Busted at ${amount.toLocaleString()} on ${levelName} — think you can do better?`;
+  return `Busted at ${amount.toLocaleString()} on ${deckName} — think you can do better?`;
 }
 
 // `username` is only present for signed-in players — the ref tag is a hook

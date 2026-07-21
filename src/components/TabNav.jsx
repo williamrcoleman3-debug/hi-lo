@@ -4,6 +4,8 @@ const TABS = [
   { id: "game", label: "Game" },
   { id: "leaderboard", label: "Leaderboard" },
   { id: "unlocks", label: "Unlocks" },
+  { id: "stats", label: "Stats" },
+  { id: "rules", label: "Rules" },
 ];
 
 export function TabNav({ active, onChange }) {

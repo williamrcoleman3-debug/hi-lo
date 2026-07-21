@@ -1,28 +1,38 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useThemeTokens, ThemeProvider } from "./themes/ThemeContext";
 import { useAuth } from "./hooks/useAuth";
 import { useProgress } from "./hooks/useProgress";
+import { capturePendingReferral } from "./referral/referral.js";
 import { TabNav } from "./components/TabNav";
 import { AuthWidget } from "./components/AuthWidget";
 import { GameScreen } from "./components/GameScreen";
 import { LeaderboardScreen } from "./components/LeaderboardScreen";
 import { UnlocksScreen } from "./components/UnlocksScreen";
+import { RulesScreen } from "./components/RulesScreen";
+import { StatsScreen } from "./components/StatsScreen";
 
 // Single source of truth for auth + progress, resolved once here so the
 // equipped theme is known before anything inside ThemeProvider renders.
 // Everything below reads it via props (GameScreen, UnlocksScreen) or via
 // useThemeTokens() (for the actual color/style values).
 export default function App() {
+  // Captures ?ref=username (if present) into localStorage on first load, so
+  // it survives the OTP email round-trip — see src/referral/referral.js and
+  // useAuth.js#createProfile, which consumes it at signup time.
+  useEffect(() => {
+    capturePendingReferral();
+  }, []);
+
   const { user, profile, refreshProfile } = useAuth();
   const userId = user?.id ?? null;
   const {
-    selectedLevelConfig,
-    unlockedLevels,
-    levelProgress,
+    selectedDeckConfig,
+    unlockedDecks,
+    deckProgress,
     equippedTheme,
     unlockedThemeIds,
     recordCorrectCall,
-    selectLevel,
+    selectDeck,
     setEquippedTheme,
   } = useProgress(userId);
 
@@ -32,13 +42,13 @@ export default function App() {
         userId={userId}
         profile={profile}
         refreshProfile={refreshProfile}
-        selectedLevelConfig={selectedLevelConfig}
-        unlockedLevels={unlockedLevels}
-        levelProgress={levelProgress}
+        selectedDeckConfig={selectedDeckConfig}
+        unlockedDecks={unlockedDecks}
+        deckProgress={deckProgress}
         equippedTheme={equippedTheme}
         unlockedThemeIds={unlockedThemeIds}
         recordCorrectCall={recordCorrectCall}
-        selectLevel={selectLevel}
+        selectDeck={selectDeck}
         setEquippedTheme={setEquippedTheme}
       />
     </ThemeProvider>
@@ -49,13 +59,13 @@ function AppShell({
   userId,
   profile,
   refreshProfile,
-  selectedLevelConfig,
-  unlockedLevels,
-  levelProgress,
+  selectedDeckConfig,
+  unlockedDecks,
+  deckProgress,
   equippedTheme,
   unlockedThemeIds,
   recordCorrectCall,
-  selectLevel,
+  selectDeck,
   setEquippedTheme,
 }) {
   const C = useThemeTokens();
@@ -71,17 +81,17 @@ function AppShell({
         <AuthWidget />
       </div>
       {/* All three screens stay mounted so switching tabs doesn't silently
-          discard an in-progress run just for checking the leaderboard. */}
+          discard an in-progress game just for checking the leaderboard. */}
       <div className="w-full flex flex-col items-center" style={{ display: tab === "game" ? "flex" : "none" }}>
         <GameScreen
           userId={userId}
           profile={profile}
           refreshProfile={refreshProfile}
-          selectedLevelConfig={selectedLevelConfig}
-          unlockedLevels={unlockedLevels}
-          levelProgress={levelProgress}
+          selectedDeckConfig={selectedDeckConfig}
+          unlockedDecks={unlockedDecks}
+          deckProgress={deckProgress}
           recordCorrectCall={recordCorrectCall}
-          selectLevel={selectLevel}
+          selectDeck={selectDeck}
         />
       </div>
       <div className="w-full flex flex-col items-center" style={{ display: tab === "leaderboard" ? "flex" : "none" }}>
@@ -93,6 +103,12 @@ function AppShell({
           equippedTheme={equippedTheme}
           setEquippedTheme={setEquippedTheme}
         />
+      </div>
+      <div className="w-full flex flex-col items-center" style={{ display: tab === "stats" ? "flex" : "none" }}>
+        <StatsScreen userId={userId} profile={profile} />
+      </div>
+      <div className="w-full flex flex-col items-center" style={{ display: tab === "rules" ? "flex" : "none" }}>
+        <RulesScreen />
       </div>
     </div>
   );

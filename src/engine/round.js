@@ -14,10 +14,10 @@ import { DEFAULT_PRICING_MODE } from "./constants.js";
 // check ground-truth achievement conditions (e.g. a long-shot Same hit)
 // even when the displayed price is the static baseline.
 export function prepareCall(deck, compareCard, call, options) {
-  const { levelConfig, mode = DEFAULT_PRICING_MODE } = options;
-  const workingDeck = deck.length === 0 ? reshuffleExcluding(compareCard, levelConfig) : deck;
+  const { deckConfig, mode = DEFAULT_PRICING_MODE } = options;
+  const workingDeck = deck.length === 0 ? reshuffleExcluding(compareCard, deckConfig) : deck;
 
-  const probs = getActiveProbs(mode, { deck: workingDeck, compareCard, levelConfig });
+  const probs = getActiveProbs(mode, { deck: workingDeck, compareCard, deckConfig });
   const p = probForCall(probs, call);
   if (p <= 0) return null;
 
@@ -42,8 +42,8 @@ export function isCorrectCall(call, compareCard, drawnCard) {
   }
 }
 
-// Applies a win: stakes the current bank (or the level's ante if this is
-// the first correct call of the run) and grows it by the priced multiplier.
+// Applies a win: stakes the current bank (or the deck's ante if this is
+// the first correct call of the game) and grows it by the priced multiplier.
 export function applyWin(banked, growth, ante) {
   const stake = banked > 0 ? banked : ante;
   const newBanked = Math.round(stake * growth);

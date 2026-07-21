@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadProgress, saveProgress, applyCorrectCall, selectLevel, selectTheme } from "../persistence/progress.js";
+import { loadProgress, saveProgress, applyCorrectCall, selectDeck, selectTheme } from "../persistence/progress.js";
 import {
-  fetchCloudLevelProgress,
-  recordLevelProgressRemote,
+  fetchCloudDeckProgress,
+  recordDeckProgressRemote,
   migrateLocalProgressToCloud,
   fetchEquippedTheme,
   pushEquippedTheme,
 } from "../persistence/cloudProgress.js";
-import { getLevel, computeUnlockedLevels } from "../engine/levels.js";
+import { getDeck, computeUnlockedDecks } from "../engine/decks.js";
 import { THEME_IDS, computeUnlockedThemes } from "../themes/registry.js";
 
 // `userId` is null for anonymous play (localStorage only, as in Phase 2) or
@@ -31,8 +31,8 @@ export function useProgress(userId) {
     let cancelled = false;
     (async () => {
       try {
-        await migrateLocalProgressToCloud(progress.levelProgress);
-        const cloudLevelProgress = await fetchCloudLevelProgress(userId);
+        await migrateLocalProgressToCloud(progress.deckProgress);
+        const cloudDeckProgress = await fetchCloudDeckProgress(userId);
         const cloudEquippedTheme = await fetchEquippedTheme(userId);
         if (cancelled) return;
 
@@ -48,8 +48,8 @@ export function useProgress(userId) {
 
         setProgress((p) => ({
           ...p,
-          levelProgress: cloudLevelProgress,
-          unlockedLevels: computeUnlockedLevels(cloudLevelProgress),
+          deckProgress: cloudDeckProgress,
+          unlockedDecks: computeUnlockedDecks(cloudDeckProgress),
           equippedTheme,
         }));
       } catch (err) {
@@ -63,11 +63,11 @@ export function useProgress(userId) {
   }, [userId]);
 
   const recordCorrectCall = useCallback(
-    (levelId, call, meta) => {
-      setProgress((p) => applyCorrectCall(p, levelId, call, meta));
+    (deckId, call, meta) => {
+      setProgress((p) => applyCorrectCall(p, deckId, call, meta));
       if (userId) {
-        recordLevelProgressRemote(levelId, {
-          streak: meta.streak,
+        recordDeckProgressRemote(deckId, {
+          winStreak: meta.winStreak,
           sameHit: call === "same",
           redBlackHit: call === "red" || call === "black",
           sameOdds: call === "same" ? meta.trueProbs.pSame : undefined,
@@ -77,29 +77,29 @@ export function useProgress(userId) {
     [userId]
   );
 
-  const selectLevelById = useCallback((levelId) => {
-    setProgress((p) => selectLevel(p, levelId));
+  const selectDeckById = useCallback((deckId) => {
+    setProgress((p) => selectDeck(p, deckId));
   }, []);
 
   const setEquippedTheme = useCallback(
     (themeId) => {
-      setProgress((p) => selectTheme(p, themeId, computeUnlockedThemes({ unlockedLevels: p.unlockedLevels })));
-      if (userId && computeUnlockedThemes({ unlockedLevels: progress.unlockedLevels }).includes(themeId)) {
+      setProgress((p) => selectTheme(p, themeId, computeUnlockedThemes({ unlockedDecks: p.unlockedDecks })));
+      if (userId && computeUnlockedThemes({ unlockedDecks: progress.unlockedDecks }).includes(themeId)) {
         pushEquippedTheme(userId, themeId);
       }
     },
-    [userId, progress.unlockedLevels]
+    [userId, progress.unlockedDecks]
   );
 
   return {
-    selectedLevel: progress.selectedLevel,
-    selectedLevelConfig: getLevel(progress.selectedLevel),
-    unlockedLevels: progress.unlockedLevels,
-    levelProgress: progress.levelProgress,
+    selectedDeck: progress.selectedDeck,
+    selectedDeckConfig: getDeck(progress.selectedDeck),
+    unlockedDecks: progress.unlockedDecks,
+    deckProgress: progress.deckProgress,
     equippedTheme: progress.equippedTheme,
-    unlockedThemeIds: computeUnlockedThemes({ unlockedLevels: progress.unlockedLevels }),
+    unlockedThemeIds: computeUnlockedThemes({ unlockedDecks: progress.unlockedDecks }),
     recordCorrectCall,
-    selectLevel: selectLevelById,
+    selectDeck: selectDeckById,
     setEquippedTheme,
   };
 }

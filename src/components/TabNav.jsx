@@ -14,6 +14,7 @@ const OVERFLOW_TABS = [
   { id: "unlocks", label: "Unlocks" },
   { id: "stats", label: "Stats" },
   { id: "rules", label: "Rules" },
+  { id: "feedback", label: "Feedback" },
 ];
 
 export function TabNav({ active, onChange }) {

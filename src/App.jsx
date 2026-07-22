@@ -12,6 +12,7 @@ import { LeaderboardScreen } from "./components/LeaderboardScreen";
 import { UnlocksScreen } from "./components/UnlocksScreen";
 import { RulesScreen } from "./components/RulesScreen";
 import { StatsScreen } from "./components/StatsScreen";
+import { FeedbackScreen } from "./components/FeedbackScreen";
 
 // Single source of truth for auth + progress, resolved once here so the
 // equipped theme is known before anything inside ThemeProvider renders.
@@ -117,6 +118,9 @@ function AppShell({
       </div>
       <div className="w-full flex flex-col items-center" style={{ display: tab === "rules" ? "flex" : "none" }}>
         <RulesScreen />
+      </div>
+      <div className="w-full flex flex-col items-center" style={{ display: tab === "feedback" ? "flex" : "none" }}>
+        <FeedbackScreen userId={userId} />
       </div>
     </div>
   );

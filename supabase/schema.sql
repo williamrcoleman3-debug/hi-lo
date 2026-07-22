@@ -583,3 +583,22 @@ left join d30 on d30.cohort_date = c.cohort_date
 order by c.cohort_date;
 
 revoke all on public.retention_by_cohort from anon, authenticated;
+
+-- feedback_submissions: player-submitted bug reports and suggestions.
+-- Insert-only from the client (no select policy at all) — submissions are
+-- read back only through the Supabase table editor, no admin UI. No RPC
+-- needed since there's no arithmetic to race on, just a plain insert gated
+-- by auth.uid() = user_id.
+create table public.feedback_submissions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  type text not null check (type in ('bug', 'suggestion')),
+  message text not null check (char_length(message) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+
+alter table public.feedback_submissions enable row level security;
+
+create policy "users can submit their own feedback"
+  on public.feedback_submissions for insert
+  with check (auth.uid() = user_id);

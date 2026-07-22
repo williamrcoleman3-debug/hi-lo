@@ -37,6 +37,7 @@ export default function App() {
     equippedTheme,
     unlockedThemeIds,
     recordCorrectCall,
+    refreshDeckProgress,
     selectDeck,
     setEquippedTheme,
   } = useProgress(userId);
@@ -54,6 +55,7 @@ export default function App() {
         equippedTheme={equippedTheme}
         unlockedThemeIds={unlockedThemeIds}
         recordCorrectCall={recordCorrectCall}
+        refreshDeckProgress={refreshDeckProgress}
         selectDeck={selectDeck}
         setEquippedTheme={setEquippedTheme}
         messages={messages}
@@ -72,6 +74,7 @@ function AppShell({
   equippedTheme,
   unlockedThemeIds,
   recordCorrectCall,
+  refreshDeckProgress,
   selectDeck,
   setEquippedTheme,
   messages,
@@ -100,6 +103,7 @@ function AppShell({
           unlockedDecks={unlockedDecks}
           deckProgress={deckProgress}
           recordCorrectCall={recordCorrectCall}
+          refreshDeckProgress={refreshDeckProgress}
           selectDeck={selectDeck}
           tagline={messages.tagline?.content}
           onViewFullLeaderboard={() => setTab("leaderboard")}

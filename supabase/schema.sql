@@ -719,3 +719,698 @@ where r.referred_signups_count > 0
 order by r.referred_signups_count desc;
 
 revoke all on public.referrer_engagement from anon, authenticated;
+-- ============================================================================
+-- SERVER-AUTHORITATIVE GAME REBUILD
+--
+-- Replaces the client-trusting model (full deck in client state, client
+-- decides win/loss, client reports a final amount) with one where the
+-- server owns the shuffled deck and the running banked/win-streak state,
+-- and the client only ever sees the current compare card, the just-revealed
+-- card, and the outcome of each call.
+--
+-- Card shape used throughout: {"rank": {"key": "K", "value": 13},
+-- "suit": {"key": "hearts", "symbol": "♥", "color": "red"}} -- deliberately
+-- matching src/engine/constants.js's shape exactly, so the client can use a
+-- card returned from these functions as a drop-in replacement for one built
+-- by the local engine, with zero transformation.
+-- ============================================================================
+
+create extension if not exists pgcrypto;
+
+-- ---------------------------------------------------------------------------
+-- Deck config helpers -- mirror src/engine/decks.js's DECKS array and
+-- src/engine/constants.js's SUITS/RANKS. Kept as small SQL functions rather
+-- than a table so there's no separate source of truth to drift out of sync
+-- with the client's engine -- if these ever change, both sides need editing
+-- together regardless of representation.
+-- ---------------------------------------------------------------------------
+create or replace function public.deck_suits(p_deck_id text) returns text[]
+language sql
+as $$
+  select case p_deck_id
+    when 'single-suit' then array['spades']
+    when 'double-suit' then array['spades','hearts']
+    when 'single-deck' then array['spades','clubs','hearts','diamonds']
+    when 'double-deck' then array['spades','clubs','hearts','diamonds']
+    else null
+  end;
+$$;
+
+create or replace function public.deck_copies(p_deck_id text) returns int
+language sql
+as $$
+  select case p_deck_id when 'double-deck' then 2 when 'single-suit' then 1 when 'double-suit' then 1 when 'single-deck' then 1 else null end;
+$$;
+
+create or replace function public.deck_ante(p_deck_id text) returns bigint
+language sql
+as $$
+  select case p_deck_id
+    when 'single-suit' then 100
+    when 'double-suit' then 200
+    when 'single-deck' then 400
+    when 'double-deck' then 800
+    else null
+  end;
+$$;
+
+create or replace function public.suit_color(p_suit text) returns text
+language sql
+as $$
+  select case when p_suit in ('hearts','diamonds') then 'red' when p_suit in ('spades','clubs') then 'mono' else null end;
+$$;
+
+create or replace function public.suit_symbol(p_suit text) returns text
+language sql
+as $$
+  select case p_suit
+    when 'spades' then '♠' when 'clubs' then '♣' when 'hearts' then '♥' when 'diamonds' then '♦'
+    else null
+  end;
+$$;
+
+-- Builds one fresh, unshuffled shoe for a deck config -- suits × 13 ranks ×
+-- copies, exactly matching engine/deck.js#freshDeck's card generation (the
+-- shuffle is a separate step, see crypto_shuffle below).
+create or replace function public.build_full_deck(p_deck_id text) returns jsonb[]
+language plpgsql
+as $$
+declare
+  v_suits text[] := public.deck_suits(p_deck_id);
+  v_copies int := public.deck_copies(p_deck_id);
+  v_rank_keys text[] := array['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  v_rank_values int[] := array[2,3,4,5,6,7,8,9,10,11,12,13,14];
+  v_cards jsonb[] := array[]::jsonb[];
+  v_suit text;
+  v_i int;
+  v_copy int;
+begin
+  if v_suits is null or v_copies is null then
+    raise exception 'unknown deck_id: %', p_deck_id;
+  end if;
+
+  for v_copy in 1..v_copies loop
+    foreach v_suit in array v_suits loop
+      for v_i in 1..array_length(v_rank_keys, 1) loop
+        v_cards := v_cards || jsonb_build_object(
+          'rank', jsonb_build_object('key', v_rank_keys[v_i], 'value', v_rank_values[v_i]),
+          'suit', jsonb_build_object('key', v_suit, 'symbol', public.suit_symbol(v_suit), 'color', public.suit_color(v_suit))
+        );
+      end loop;
+    end loop;
+  end loop;
+
+  return v_cards;
+end;
+$$;
+
+-- Fisher-Yates shuffle using gen_random_bytes (pgcrypto, OS-level CSPRNG) for
+-- the random index at each step -- replaces the client's Math.random()
+-- shuffle, which is neither secret (the deck was fully visible client-side
+-- anyway) nor cryptographically secure. Reads 4 random bytes as an unsigned
+-- 32-bit integer per swap rather than casting through a signed bigint, to
+-- avoid sign-extension surprises.
+create or replace function public.crypto_shuffle(p_deck jsonb[]) returns jsonb[]
+language plpgsql
+as $$
+declare
+  v_arr jsonb[] := p_deck;
+  v_n int := array_length(p_deck, 1);
+  v_i int;
+  v_j int;
+  v_tmp jsonb;
+  v_bytes bytea;
+  v_rand bigint;
+begin
+  if v_n is null or v_n <= 1 then return v_arr; end if;
+
+  for v_i in reverse v_n..2 loop
+    v_bytes := gen_random_bytes(4);
+    v_rand := (get_byte(v_bytes, 0)::bigint << 24)
+            | (get_byte(v_bytes, 1)::bigint << 16)
+            | (get_byte(v_bytes, 2)::bigint << 8)
+            | get_byte(v_bytes, 3)::bigint;
+    v_j := 1 + (v_rand % v_i);
+    v_tmp := v_arr[v_i];
+    v_arr[v_i] := v_arr[v_j];
+    v_arr[v_j] := v_tmp;
+  end loop;
+
+  return v_arr;
+end;
+$$;
+
+-- Odds as if the shoe were freshly reshuffled and full, given only the
+-- current card's rank/color -- mirrors engine/odds.js#calcBaselineProbs
+-- exactly (never the actual remaining deck). This is what the server uses
+-- to independently recompute the payout for a call, rather than trusting
+-- anything from the client -- the client shows the identical number using
+-- the same public formula (see src/engine/odds.js), just computed locally
+-- for display since it needs no secret.
+create or replace function public.calc_baseline_prob(p_deck_id text, p_compare_value int, p_compare_color text, p_call text) returns double precision
+language plpgsql
+as $$
+declare
+  v_suits text[] := public.deck_suits(p_deck_id);
+  v_copies int := public.deck_copies(p_deck_id);
+  v_rank_values int[] := array[2,3,4,5,6,7,8,9,10,11,12,13,14];
+  v_total_cards int;
+  v_higher int := 0;
+  v_lower int := 0;
+  v_same int := 0;
+  v_red int := 0;
+  v_black int := 0;
+  v_suit text;
+  v_val int;
+  v_n int;
+begin
+  if v_suits is null or v_copies is null then
+    raise exception 'unknown deck_id: %', p_deck_id;
+  end if;
+
+  v_total_cards := array_length(v_suits, 1) * array_length(v_rank_values, 1) * v_copies;
+
+  foreach v_suit in array v_suits loop
+    foreach v_val in array v_rank_values loop
+      if v_val > p_compare_value then v_higher := v_higher + v_copies;
+      elsif v_val < p_compare_value then v_lower := v_lower + v_copies;
+      else v_same := v_same + v_copies;
+      end if;
+      if public.suit_color(v_suit) = 'red' then v_red := v_red + v_copies;
+      else v_black := v_black + v_copies;
+      end if;
+    end loop;
+  end loop;
+
+  -- The compare card itself is already in play, not sitting in the
+  -- hypothetical fresh shoe -- remove exactly that one physical instance.
+  v_same := v_same - 1;
+  if p_compare_color = 'red' then v_red := v_red - 1; else v_black := v_black - 1; end if;
+
+  v_n := v_total_cards - 1;
+  if v_n <= 0 then return 0; end if;
+
+  return (case p_call
+    when 'higher' then v_higher
+    when 'lower' then v_lower
+    when 'same' then v_same
+    when 'red' then v_red
+    when 'black' then v_black
+    else 0
+  end)::double precision / v_n;
+end;
+$$;
+
+create or replace function public.growth_for(p_prob double precision) returns double precision
+language sql
+as $$
+  select case when p_prob is null or p_prob <= 0 then 0 else (1 - 0.01) / p_prob end;
+$$;
+
+-- True odds of a "Same" hit off the ACTUAL remaining deck at the moment of a
+-- call -- mirrors engine/odds.js#calcProbs, narrowed to just pSame since
+-- that's the only true-odds figure anything still reads (deck_progress.
+-- lowest_odds_same_hit, an old achievement field -- see the comment on that
+-- column further down). Computed server-side since it needs the real deck.
+create or replace function public.calc_true_same_prob(p_deck jsonb[], p_compare_value int) returns double precision
+language plpgsql
+as $$
+declare
+  v_n int := array_length(p_deck, 1);
+  v_same_count int := 0;
+  v_i int;
+begin
+  if v_n is null or v_n = 0 then return 0; end if;
+  for v_i in 1..v_n loop
+    if (p_deck[v_i]->'rank'->>'value')::int = p_compare_value then
+      v_same_count := v_same_count + 1;
+    end if;
+  end loop;
+  return v_same_count::double precision / v_n;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- game_sessions: the server's own record of an in-progress game. `deck` is
+-- the entire remaining shoe -- this is the one column that must NEVER be
+-- readable by any client role, in any form, which is why there is no SELECT
+-- grant on this table at all (not even scoped to the owning user -- a plain
+-- `select *` would include `deck`). All interaction goes through the
+-- SECURITY DEFINER functions below, which return only a sanitized shape.
+-- ---------------------------------------------------------------------------
+create table public.game_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  deck_id text not null,
+  deck jsonb[] not null,
+  compare_card jsonb not null,
+  pending_card jsonb,
+  banked bigint not null default 0,
+  win_streak int not null default 0,
+  hands_won_this_game int not null default 0,
+  lifelines_used int not null default 0,
+  ever_same_hit boolean not null default false,
+  ever_red_black_hit boolean not null default false,
+  lowest_same_odds double precision,
+  status text not null default 'playing' check (status in ('playing', 'lifeline-offer', 'busted', 'cashed')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.game_sessions enable row level security;
+revoke all on public.game_sessions from anon, authenticated;
+
+-- Starts a fresh session: shuffles a full shoe server-side (CSPRNG), holds
+-- the shoe minus its first card, and returns only that first card plus the
+-- session id and how many cards are left. The rest of the shoe never
+-- leaves the server.
+create or replace function public.start_game(p_deck_id text)
+returns table (session_id uuid, compare_card jsonb, cards_left int, ante bigint)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_deck jsonb[];
+  v_compare jsonb;
+  v_session_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  v_deck := public.crypto_shuffle(public.build_full_deck(p_deck_id));
+  v_compare := v_deck[1];
+  v_deck := v_deck[2:array_length(v_deck, 1)];
+
+  insert into public.game_sessions (user_id, deck_id, deck, compare_card)
+  values (auth.uid(), p_deck_id, v_deck, v_compare)
+  returning id into v_session_id;
+
+  return query select v_session_id, v_compare, array_length(v_deck, 1), public.deck_ante(p_deck_id);
+end;
+$$;
+
+revoke all on function public.start_game(text) from public;
+grant execute on function public.start_game(text) to authenticated;
+
+-- The one call-resolution endpoint. Draws the next card from the server's
+-- own copy of the deck, decides correctness itself, and independently
+-- recomputes the payout from the public baseline-odds formula (never from
+-- anything the client sends) -- the client only ever learns the outcome
+-- after the fact. On a wrong call this does NOT end the game: it parks the
+-- drawn card as `pending_card` and flips to 'lifeline-offer' so the client
+-- can still choose to spend a lifeline (see use_lifeline_in_session) before
+-- the game is finalized via bust_session.
+create or replace function public.make_call(p_session_id uuid, p_call text)
+returns table (correct boolean, drawn_card jsonb, banked bigint, win_streak int, status text, gain bigint, cards_left int)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_session public.game_sessions;
+  v_deck jsonb[];
+  v_compare jsonb;
+  v_drawn jsonb;
+  v_compare_value int;
+  v_compare_color text;
+  v_prob double precision;
+  v_growth double precision;
+  v_correct boolean;
+  v_stake bigint;
+  v_new_banked bigint;
+  v_gain bigint;
+  v_new_streak int;
+  v_true_same_prob double precision;
+  v_n int;
+  v_k int;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  if p_call not in ('higher', 'lower', 'same', 'red', 'black') then
+    raise exception 'invalid call';
+  end if;
+
+  select * into v_session from public.game_sessions
+   where id = p_session_id and user_id = auth.uid() and public.game_sessions.status = 'playing'
+   for update;
+
+  if not found then
+    raise exception 'no active session in playing state';
+  end if;
+
+  v_deck := v_session.deck;
+  v_compare := v_session.compare_card;
+  v_compare_value := (v_compare->'rank'->>'value')::int;
+  v_compare_color := v_compare->'suit'->>'color';
+
+  -- Reshuffle-excluding: mirrors engine/deck.js#reshuffleExcluding -- a
+  -- fresh shoe, minus exactly the one physical card currently in play.
+  if array_length(v_deck, 1) is null or array_length(v_deck, 1) = 0 then
+    v_deck := public.crypto_shuffle(public.build_full_deck(v_session.deck_id));
+    v_n := array_length(v_deck, 1);
+    for v_k in 1..v_n loop
+      if v_deck[v_k]->'rank'->>'key' = v_compare->'rank'->>'key'
+         and v_deck[v_k]->'suit'->>'key' = v_compare->'suit'->>'key' then
+        v_deck := v_deck[1:v_k-1] || v_deck[v_k+1:v_n];
+        exit;
+      end if;
+    end loop;
+  end if;
+
+  v_true_same_prob := public.calc_true_same_prob(v_deck, v_compare_value);
+
+  v_prob := public.calc_baseline_prob(v_session.deck_id, v_compare_value, v_compare_color, p_call);
+  if v_prob <= 0 then
+    raise exception 'call not possible';
+  end if;
+  v_growth := public.growth_for(v_prob);
+
+  v_drawn := v_deck[1];
+  v_deck := v_deck[2:array_length(v_deck, 1)];
+
+  v_correct := case p_call
+    when 'same' then (v_drawn->'rank'->>'value')::int = v_compare_value
+    when 'higher' then (v_drawn->'rank'->>'value')::int > v_compare_value
+    when 'lower' then (v_drawn->'rank'->>'value')::int < v_compare_value
+    when 'red' then v_drawn->'suit'->>'color' = 'red'
+    when 'black' then v_drawn->'suit'->>'color' = 'mono'
+    else false
+  end;
+
+  if v_correct then
+    v_stake := case when v_session.banked > 0 then v_session.banked else public.deck_ante(v_session.deck_id) end;
+    v_new_banked := round(v_stake * v_growth);
+    v_gain := v_new_banked - v_session.banked;
+    v_new_streak := v_session.win_streak + 1;
+
+    update public.game_sessions
+       set deck = v_deck,
+           compare_card = v_drawn,
+           pending_card = null,
+           banked = v_new_banked,
+           win_streak = v_new_streak,
+           hands_won_this_game = hands_won_this_game + 1,
+           ever_same_hit = ever_same_hit or (p_call = 'same'),
+           ever_red_black_hit = ever_red_black_hit or (p_call in ('red', 'black')),
+           lowest_same_odds = case
+             when p_call = 'same' and lowest_same_odds is null then v_true_same_prob
+             when p_call = 'same' then least(lowest_same_odds, v_true_same_prob)
+             else lowest_same_odds
+           end,
+           updated_at = now()
+     where id = p_session_id;
+
+    return query select true, v_drawn, v_new_banked, v_new_streak, 'playing'::text, v_gain, array_length(v_deck, 1);
+  else
+    update public.game_sessions
+       set deck = v_deck,
+           pending_card = v_drawn,
+           status = 'lifeline-offer',
+           updated_at = now()
+     where id = p_session_id;
+
+    return query select false, v_drawn, v_session.banked, v_session.win_streak, 'lifeline-offer'::text, 0::bigint, array_length(v_deck, 1);
+  end if;
+end;
+$$;
+
+revoke all on function public.make_call(uuid, text) from public;
+grant execute on function public.make_call(uuid, text) to authenticated;
+
+-- Spends one lifeline to forgive the pending wrong call: the win streak
+-- neither increments nor resets (it just holds), and the wrongly-called
+-- card becomes the new compare card, exactly like a normal hand advancing.
+-- The per-game cap of 2 (MAX_LIFELINES_PER_GAME client-side) is now also
+-- enforced here server-side, not just as a UI courtesy.
+create or replace function public.use_lifeline_in_session(p_session_id uuid)
+returns table (success boolean, compare_card jsonb, lifeline_balance integer, status text)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_session public.game_sessions;
+  v_balance integer;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  select * into v_session from public.game_sessions
+   where id = p_session_id and user_id = auth.uid() and public.game_sessions.status = 'lifeline-offer'
+   for update;
+
+  if not found then
+    return query select false, null::jsonb, (select p.lifeline_balance from public.profiles p where p.id = auth.uid()), null::text;
+    return;
+  end if;
+
+  if v_session.lifelines_used >= 2 then
+    return query select false, null::jsonb, (select p.lifeline_balance from public.profiles p where p.id = auth.uid()), v_session.status;
+    return;
+  end if;
+
+  select p.lifeline_balance into v_balance from public.profiles p where p.id = auth.uid() for update;
+  if coalesce(v_balance, 0) <= 0 then
+    return query select false, null::jsonb, coalesce(v_balance, 0), v_session.status;
+    return;
+  end if;
+
+  update public.profiles set lifeline_balance = public.profiles.lifeline_balance - 1 where id = auth.uid();
+
+  update public.game_sessions
+     set compare_card = pending_card,
+         pending_card = null,
+         lifelines_used = lifelines_used + 1,
+         status = 'playing',
+         updated_at = now()
+   where id = p_session_id;
+
+  return query select true, v_session.pending_card, (select p.lifeline_balance from public.profiles p where p.id = auth.uid()), 'playing'::text;
+end;
+$$;
+
+revoke all on function public.use_lifeline_in_session(uuid) from public;
+grant execute on function public.use_lifeline_in_session(uuid) to authenticated;
+
+-- Shared finalize logic for both bust_session and bank_session below --
+-- absorbs the ENTIRE previous body of record_game_end() (leaderboard_scores,
+-- daily_activity, referral first-game payout, daily streak, spendable
+-- tokens) and record_deck_progress() (best_win_streak, same/red-black hit
+-- flags, lowest Same odds, hands_won, games_played), reading every value
+-- from the session itself instead of from client-supplied parameters. No
+-- EXECUTE grant to any client role -- only callable from within
+-- bust_session/bank_session, which run as this function's owner regardless
+-- of grants (grants gate direct top-level RPC calls, not function-to-
+-- function calls within the same already-elevated execution).
+create or replace function public.finalize_session(p_session_id uuid, p_was_banked boolean)
+returns table (is_new_peak boolean)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_session public.game_sessions;
+  v_today date := (now() at time zone 'utc')::date;
+  v_last date;
+  v_current int;
+  v_longest int;
+  v_gap int;
+  v_prev_peak bigint;
+  v_had_played_before boolean;
+  v_referred_by uuid;
+  v_reward_granted boolean;
+  v_amount bigint;
+begin
+  select * into v_session from public.game_sessions where id = p_session_id for update;
+  if not found then
+    raise exception 'session not found';
+  end if;
+
+  v_amount := v_session.banked;
+
+  update public.game_sessions
+     set status = case when p_was_banked then 'cashed' else 'busted' end,
+         updated_at = now()
+   where id = p_session_id;
+
+  select peak_score into v_prev_peak
+    from public.leaderboard_scores
+   where user_id = v_session.user_id and deck_id = v_session.deck_id;
+
+  insert into public.deck_progress (user_id, deck_id, best_win_streak, same_hit, red_black_hit, lowest_odds_same_hit, games_played, hands_won, updated_at)
+  values (
+    v_session.user_id,
+    v_session.deck_id,
+    v_session.win_streak,
+    v_session.ever_same_hit,
+    v_session.ever_red_black_hit,
+    v_session.lowest_same_odds,
+    1,
+    v_session.hands_won_this_game,
+    now()
+  )
+  on conflict (user_id, deck_id) do update set
+    best_win_streak = greatest(public.deck_progress.best_win_streak, v_session.win_streak),
+    same_hit = public.deck_progress.same_hit or v_session.ever_same_hit,
+    red_black_hit = public.deck_progress.red_black_hit or v_session.ever_red_black_hit,
+    lowest_odds_same_hit = case
+      when v_session.lowest_same_odds is null then public.deck_progress.lowest_odds_same_hit
+      when public.deck_progress.lowest_odds_same_hit is null then v_session.lowest_same_odds
+      else least(public.deck_progress.lowest_odds_same_hit, v_session.lowest_same_odds)
+    end,
+    games_played = public.deck_progress.games_played + 1,
+    hands_won = public.deck_progress.hands_won + v_session.hands_won_this_game,
+    updated_at = now();
+
+  insert into public.leaderboard_scores (user_id, deck_id, cumulative_banked, peak_score, updated_at)
+  values (
+    v_session.user_id,
+    v_session.deck_id,
+    case when p_was_banked then v_amount else 0 end,
+    v_amount,
+    now()
+  )
+  on conflict (user_id, deck_id) do update set
+    cumulative_banked = public.leaderboard_scores.cumulative_banked
+      + (case when p_was_banked then v_amount else 0 end),
+    peak_score = greatest(public.leaderboard_scores.peak_score, v_amount),
+    updated_at = now();
+
+  insert into public.daily_activity (user_id, activity_date)
+  values (v_session.user_id, v_today)
+  on conflict (user_id, activity_date) do nothing;
+
+  select has_played_ever, referred_by, referral_reward_granted
+    into v_had_played_before, v_referred_by, v_reward_granted
+    from public.profiles
+   where id = v_session.user_id
+   for update;
+
+  if not coalesce(v_had_played_before, false) then
+    update public.profiles set has_played_ever = true where id = v_session.user_id;
+
+    if v_referred_by is not null and not coalesce(v_reward_granted, false) then
+      update public.profiles set referral_reward_granted = true where id = v_session.user_id;
+      update public.profiles
+         set lifeline_balance = lifeline_balance + 5,
+             qualified_referral_count = qualified_referral_count + 1
+       where id = v_referred_by;
+    end if;
+  end if;
+
+  if p_was_banked then
+    select last_banked_date, current_streak, longest_streak
+      into v_last, v_current, v_longest
+      from public.profiles
+     where id = v_session.user_id;
+
+    update public.profiles
+       set spendable_tokens = spendable_tokens + v_amount,
+           has_banked_ever = true
+     where id = v_session.user_id;
+
+    v_gap := case when v_last is null then null else v_today - v_last end;
+
+    if v_gap = 0 then
+      null;
+    else
+      v_current := case when v_gap = 1 then coalesce(v_current, 0) + 1 else 1 end;
+      v_longest := greatest(coalesce(v_longest, 0), v_current);
+
+      update public.profiles
+         set current_streak = v_current,
+             longest_streak = v_longest,
+             last_banked_date = v_today
+       where id = v_session.user_id;
+    end if;
+  end if;
+
+  return query select (v_amount > coalesce(v_prev_peak, 0));
+end;
+$$;
+
+revoke all on function public.finalize_session(uuid, boolean) from public, anon, authenticated;
+
+-- Public entry point for a bust (wrong call declined, or the clock ran
+-- out) -- finalizes at whatever the session already, truthfully, has
+-- banked. A client can trigger this early or "lie" about why the game
+-- ended, but can never inflate the amount: it only ever ends the game at
+-- the currently server-tracked value.
+create or replace function public.bust_session(p_session_id uuid)
+returns table (is_new_peak boolean)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_status text;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  select user_id, status into v_owner, v_status from public.game_sessions where id = p_session_id for update;
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'no such session';
+  end if;
+  if v_status not in ('playing', 'lifeline-offer') then
+    raise exception 'session already finalized';
+  end if;
+
+  return query select * from public.finalize_session(p_session_id, false);
+end;
+$$;
+
+revoke all on function public.bust_session(uuid) from public;
+grant execute on function public.bust_session(uuid) to authenticated;
+
+-- Public entry point for banking -- only valid mid-game with something
+-- actually banked, exactly mirroring the client's existing cashOut guard.
+create or replace function public.bank_session(p_session_id uuid)
+returns table (is_new_peak boolean)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_owner uuid;
+  v_status text;
+  v_banked bigint;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  select user_id, status, banked into v_owner, v_status, v_banked from public.game_sessions where id = p_session_id for update;
+  if v_owner is null or v_owner <> auth.uid() then
+    raise exception 'no such session';
+  end if;
+  if v_status <> 'playing' then
+    raise exception 'session not in a bankable state';
+  end if;
+  if v_banked <= 0 then
+    raise exception 'nothing banked yet';
+  end if;
+
+  return query select * from public.finalize_session(p_session_id, true);
+end;
+$$;
+
+revoke all on function public.bank_session(uuid) from public;
+grant execute on function public.bank_session(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Retire the old client-facing endpoints that accepted a raw client-
+-- reported amount/win-streak as truth. Left defined (harmless -- nothing
+-- calls them anymore) but no longer callable by any client role, which is
+-- exactly the property being fixed: there is no longer any endpoint a
+-- client can hit with a fabricated outcome and have it recorded.
+-- ---------------------------------------------------------------------------
+revoke all on function public.record_game_end(text, bigint, boolean) from authenticated, anon, public;
+revoke all on function public.record_deck_progress(text, integer, boolean, boolean, double precision) from authenticated, anon, public;

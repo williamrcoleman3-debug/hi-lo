@@ -24,55 +24,19 @@ export async function fetchCloudDeckProgress(userId) {
   return deckProgress;
 }
 
-// Mirrors applyCorrectCall's fold (see persistence/progress.js), but as an
-// atomic DB-side upsert via record_deck_progress() — safe against races
-// from multiple tabs/devices. Fire-and-forget from the caller's perspective;
-// errors are logged, not thrown, since this is a best-effort background sync
-// layered on top of the always-authoritative local optimistic update.
-export async function recordDeckProgressRemote(deckId, { winStreak, sameHit, redBlackHit, sameOdds }) {
-  const { error } = await supabase.rpc("record_deck_progress", {
-    p_deck_id: deckId,
-    p_win_streak: winStreak,
-    p_same_hit: sameHit,
-    p_red_black_hit: redBlackHit,
-    p_same_odds: sameOdds ?? null,
-  });
-  if (error) console.error("recordDeckProgressRemote failed:", error.message);
-}
-
-// Returns { isNewPeak } — whether this amount beat the player's previous
-// peak_score for the deck, straight from the atomic RPC (see
-// supabase/schema.sql#record_game_end) rather than a separate client-side
-// read-then-compare, which could race across tabs/devices.
-export async function recordGameEndRemote(deckId, amount, wasBanked) {
-  const { data, error } = await supabase.rpc("record_game_end", {
-    p_deck_id: deckId,
-    p_amount: amount,
-    p_was_banked: wasBanked,
-  });
-  if (error) {
-    console.error("recordGameEndRemote failed:", error.message);
-    return { isNewPeak: false };
-  }
-  return { isNewPeak: data?.[0]?.is_new_peak ?? false };
-}
-
-// One-time (per sign-in) push of whatever was accumulated anonymously in
-// localStorage, so a player who creates an account after playing a while
-// doesn't lose that progress. Safe to call repeatedly — the RPC's
-// GREATEST/OR merge semantics make this idempotent.
-export async function migrateLocalProgressToCloud(localDeckProgress) {
-  for (const deck of DECKS) {
-    const dp = localDeckProgress[deck.id];
-    if (!dp || (dp.bestWinStreak === 0 && !dp.sameHit && !dp.redBlackHit)) continue;
-    await recordDeckProgressRemote(deck.id, {
-      winStreak: dp.bestWinStreak,
-      sameHit: dp.sameHit,
-      redBlackHit: dp.redBlackHit,
-      sameOdds: dp.lowestOddsSameHit ?? undefined,
-    });
-  }
-}
+// record_deck_progress()/record_game_end() are retired (see
+// supabase/schema.sql) -- the server now tracks banked amount, win streak,
+// and deck_progress entirely itself via a game_sessions row, finalized
+// through bust_session()/bank_session() (see src/session/gameSession.js).
+// There is no longer any endpoint that accepts a client-reported outcome.
+//
+// This also means anonymous (local-only, never server-touched) progress no
+// longer migrates into deck_progress on sign-in (migrateLocalProgressToCloud
+// is gone) -- that data was always purely client-computed with nothing to
+// verify it, so crediting it to a real account's best_win_streak would just
+// reopen the exact hole this rebuild closes. A player who signs up after
+// playing anonymously starts deck_progress fresh; equipped_theme (a
+// cosmetic preference, not an achievement) still carries over below.
 
 // equipped_theme is a plain preference, not a race-sensitive metric like the
 // streak/score columns — a direct table read/write is fine, no RPC needed.

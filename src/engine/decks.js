@@ -3,8 +3,6 @@ import { SUITS } from "./constants.js";
 const [SPADES, , HEARTS] = SUITS; // spades (mono), hearts (red) — one of each color for Double Suit
 
 export const WIN_STREAK_UNLOCK_TARGET = 10;
-// Double Deck unlock requires a Same hit at REAL odds under this, at Single Deck.
-export const LONGSHOT_SAME_THRESHOLD = 0.15;
 
 export const DECKS = [
   { id: "single-suit", name: "Single Suit", suits: [SPADES], deckCopies: 1, ante: 100 },
@@ -21,22 +19,19 @@ export function getDeck(id) {
 
 // What it takes to unlock a deck, evaluated against the PRECEDING deck's
 // progress record — human-readable text doubles as the locked-state copy.
-export const UNLOCK_REQUIREMENTS = {
-  "double-suit": {
-    description: `Reach a ${WIN_STREAK_UNLOCK_TARGET}-hand win streak on Single Suit`,
+// Flat and uniform across every tier: a 10-hand Win Streak on the current
+// deck, nothing else — no Same/Red-Black/odds conditions.
+function makeFlatRequirement(prevDeckName) {
+  return {
+    description: `Reach a ${WIN_STREAK_UNLOCK_TARGET}-hand win streak on ${prevDeckName}`,
     isMet: (prev) => prev.bestWinStreak >= WIN_STREAK_UNLOCK_TARGET,
-  },
-  "single-deck": {
-    description: `Reach a ${WIN_STREAK_UNLOCK_TARGET}-hand win streak on Double Suit, having called Same and Red/Black correctly at least once each`,
-    isMet: (prev) => prev.bestWinStreak >= WIN_STREAK_UNLOCK_TARGET && prev.sameHit && prev.redBlackHit,
-  },
-  "double-deck": {
-    description: `Reach a ${WIN_STREAK_UNLOCK_TARGET}-hand win streak on Single Deck, with a Same hit at real odds under ${Math.round(LONGSHOT_SAME_THRESHOLD * 100)}%`,
-    isMet: (prev) =>
-      prev.bestWinStreak >= WIN_STREAK_UNLOCK_TARGET &&
-      prev.lowestOddsSameHit !== null &&
-      prev.lowestOddsSameHit < LONGSHOT_SAME_THRESHOLD,
-  },
+  };
+}
+
+export const UNLOCK_REQUIREMENTS = {
+  "double-suit": makeFlatRequirement("Single Suit"),
+  "single-deck": makeFlatRequirement("Double Suit"),
+  "double-deck": makeFlatRequirement("Single Deck"),
 };
 
 // Progression is linear: deck N+1 can only unlock once deck N is unlocked

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useThemeTokens, ThemeProvider } from "./themes/ThemeContext";
 import { useAuth } from "./hooks/useAuth";
 import { useProgress } from "./hooks/useProgress";
+import { useSiteMessages } from "./hooks/useSiteMessages";
 import { capturePendingReferral } from "./referral/referral.js";
 import { TabNav } from "./components/TabNav";
 import { AuthWidget } from "./components/AuthWidget";
+import { SiteBanner } from "./components/SiteBanner";
 import { GameScreen } from "./components/GameScreen";
 import { LeaderboardScreen } from "./components/LeaderboardScreen";
 import { UnlocksScreen } from "./components/UnlocksScreen";
@@ -35,6 +37,7 @@ export default function App() {
     selectDeck,
     setEquippedTheme,
   } = useProgress(userId);
+  const { messages } = useSiteMessages();
 
   return (
     <ThemeProvider themeId={equippedTheme}>
@@ -50,6 +53,7 @@ export default function App() {
         recordCorrectCall={recordCorrectCall}
         selectDeck={selectDeck}
         setEquippedTheme={setEquippedTheme}
+        messages={messages}
       />
     </ThemeProvider>
   );
@@ -67,6 +71,7 @@ function AppShell({
   recordCorrectCall,
   selectDeck,
   setEquippedTheme,
+  messages,
 }) {
   const C = useThemeTokens();
   const [tab, setTab] = useState("game");
@@ -80,6 +85,7 @@ function AppShell({
         <TabNav active={tab} onChange={setTab} />
         <AuthWidget />
       </div>
+      <SiteBanner userId={userId} messages={messages} />
       {/* All three screens stay mounted so switching tabs doesn't silently
           discard an in-progress game just for checking the leaderboard. */}
       <div className="w-full flex flex-col items-center" style={{ display: tab === "game" ? "flex" : "none" }}>
@@ -92,6 +98,8 @@ function AppShell({
           deckProgress={deckProgress}
           recordCorrectCall={recordCorrectCall}
           selectDeck={selectDeck}
+          tagline={messages.tagline?.content}
+          onViewFullLeaderboard={() => setTab("leaderboard")}
         />
       </div>
       <div className="w-full flex flex-col items-center" style={{ display: tab === "leaderboard" ? "flex" : "none" }}>

@@ -17,13 +17,6 @@ export const TIMER_MS = 6000;
 export const AUTO_ADVANCE_MS = 1300; // pause after a win — long enough to screenshot, then auto-continues
 export const HOUSE_EDGE = 0.01; // 1% — applied uniformly to every call via true-odds pricing
 
-// Illustrative-only reference curve, computed at the *average* optimal-call
-// win rate (~72.4%) across all 13 ranks, at a 100-point ante. Real payout is
-// priced per hand off the deck's static baseline odds — this is just a
-// rough "what to expect" guide. Scale by (deck.ante / 100) for other decks
-// — ante scaling is confirmed proportional, so the curve scales with it.
-export const AVG_REFERENCE = [100, 37, 50, 69, 94, 128, 176, 240, 329, 449];
-
 // static-baseline: price every call off a fresh, full shoe for that rank —
 // the gap between this price and the true remaining-deck odds is the skill
 // (card counting). true-live-odds: price off the actual remaining deck, as

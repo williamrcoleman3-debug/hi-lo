@@ -6,7 +6,7 @@ import { recordGameEndRemote } from "../persistence/cloudProgress";
 import { buildShareText, buildShareUrl, shareResult } from "../share/share";
 import { redeemLifeline, useLifelineRemote, LIFELINE_COST_TOKENS } from "../lifelines/lifelines.js";
 import { Card } from "./Card";
-import { ReferenceLadder } from "./ReferenceLadder";
+import { WinStreakLeaderboardWidget } from "./WinStreakLeaderboardWidget";
 import { DeckSwitcher } from "./DeckSwitcher";
 
 export function GameScreen({
@@ -18,6 +18,8 @@ export function GameScreen({
   deckProgress,
   recordCorrectCall,
   selectDeck,
+  tagline,
+  onViewFullLeaderboard,
 }) {
   const C = useThemeTokens();
   const [isNewPeak, setIsNewPeak] = useState(false);
@@ -156,7 +158,7 @@ export function GameScreen({
             Higher · Lower <span style={{ color: C.gold }}>· Same</span>
           </h1>
           <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
-            Payouts are priced off a fresh shoe, not the one in front of you. One miss — or one hesitation — wipes the game.
+            {tagline ?? "Pick the next card. It's easier if you can remember all the cards you've already seen."}
           </p>
         </div>
         <div className="text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -386,9 +388,9 @@ export function GameScreen({
             )}
           </div>
 
-          {/* Ladder + stats */}
-          <div className="flex flex-col items-center gap-4">
-            <ReferenceLadder winStreak={winStreak} justClimbed={justClimbed} ante={selectedDeckConfig.ante} />
+          {/* Leaderboard + stats */}
+          <div className="flex flex-col items-center gap-4 w-full">
+            <WinStreakLeaderboardWidget onViewFull={onViewFullLeaderboard} />
             <div
               className="w-full flex flex-col gap-2 text-xs pt-3"
               style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}

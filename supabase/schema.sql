@@ -461,3 +461,47 @@ grant execute on function public.get_total_hands_won_leaderboard() to anon, auth
 -- Leaderboard 3 (Total Token Score, per deck) reuses the existing
 -- leaderboard_scores.cumulative_banked column/table directly — no new
 -- function needed, just a differently-scoped query client-side.
+
+-- site_messages: one editable-copy mechanism for all of it — the
+-- signed-out/signed-in banners AND the game-screen tagline are all rows
+-- here, not separate systems per piece of text. Edited directly through
+-- the Supabase table editor; no admin UI, no client write path at all (see
+-- the RLS below — there's deliberately no insert/update policy, so no
+-- client role can ever write here, only the dashboard's elevated access).
+--
+-- The trigger keeps updated_at current on any edit automatically, so
+-- editing `content` in the table editor is enough to invalidate every
+-- visitor's prior dismissal — the client compares this timestamp against
+-- what it last dismissed (see src/siteMessages/siteMessages.js) rather
+-- than tracking "has this slot ever been dismissed."
+create table public.site_messages (
+  slot text primary key check (slot in ('banner_signed_out', 'banner_signed_in', 'tagline')),
+  content text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.site_messages enable row level security;
+
+create policy "site messages are publicly readable"
+  on public.site_messages for select
+  using (true);
+
+create or replace function public.touch_site_messages_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create trigger site_messages_touch_updated_at
+  before update on public.site_messages
+  for each row
+  execute function public.touch_site_messages_updated_at();
+
+insert into public.site_messages (slot, content) values
+  ('banner_signed_out', 'Sign in to save your progress and get on the leaderboard — Hi-Lo Stakes is running a real prize contest for the Single Deck Win Streak record. See the Rules tab for details.'),
+  ('banner_signed_in', 'Welcome back — check the Leaderboard tab to see where you stand.'),
+  ('tagline', 'Pick the next card. It''s easier if you can remember all the cards you''ve already seen.');

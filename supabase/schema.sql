@@ -131,6 +131,22 @@ create policy "leaderboard scores are publicly readable"
   on public.leaderboard_scores for select
   using (true);
 
+-- daily_activity: one row per user per UTC calendar day they completed at
+-- least one Game (Bank OR Bust — unlike the Daily Streak above, which only
+-- advances on Bank). Pure backend retention logging — no client reads this,
+-- no UI surfaces it. Populated by record_game_end() below (unconditionally,
+-- on every completed game), on conflict do nothing so repeat completions the
+-- same day are a no-op. Query D1/D7/D30 retention via the views further down
+-- (user_first_activity, retention_by_cohort) straight from the SQL editor.
+create table public.daily_activity (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  activity_date date not null,
+  primary key (user_id, activity_date)
+);
+
+alter table public.daily_activity enable row level security;
+revoke all on public.daily_activity from anon, authenticated;
+
 -- Atomically records one game's end (Bank or Bust). SECURITY DEFINER lets
 -- this bypass RLS to perform the upsert, but it always operates on
 -- auth.uid() internally — never a client-supplied user id — so a caller can
@@ -175,6 +191,12 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+
+  -- Retention logging: every completed game (bust or bank) counts as this
+  -- user being "active" today, regardless of what happens below.
+  insert into public.daily_activity (user_id, activity_date)
+  values (auth.uid(), v_today)
+  on conflict (user_id, activity_date) do nothing;
 
   select peak_score into v_prev_peak
     from public.leaderboard_scores
@@ -505,3 +527,59 @@ insert into public.site_messages (slot, content) values
   ('banner_signed_out', 'Sign in to save your progress and get on the leaderboard — Hi-Lo Stakes is running a real prize contest for the Single Deck Win Streak record. See the Rules tab for details.'),
   ('banner_signed_in', 'Welcome back — check the Leaderboard tab to see where you stand.'),
   ('tagline', 'Pick the next card. It''s easier if you can remember all the cards you''ve already seen.');
+
+-- Retention views (D1/D7/D30) — pure SQL-editor analytics, nothing granted
+-- to anon/authenticated. cohort_date is a user's first-ever activity_date;
+-- retention_by_cohort gives cohort size plus how many of that cohort were
+-- also active exactly 1/7/30 days later, as both a count and a percentage.
+-- Query it directly, filter/sort by cohort_date for whatever window matters.
+create view public.user_first_activity as
+  select user_id, min(activity_date) as cohort_date
+  from public.daily_activity
+  group by user_id;
+
+revoke all on public.user_first_activity from anon, authenticated;
+
+create view public.retention_by_cohort as
+with cohorts as (
+  select cohort_date, count(*) as cohort_size
+  from public.user_first_activity
+  group by cohort_date
+),
+d1 as (
+  select f.cohort_date, count(*) as retained
+  from public.user_first_activity f
+  join public.daily_activity a
+    on a.user_id = f.user_id and a.activity_date = f.cohort_date + 1
+  group by f.cohort_date
+),
+d7 as (
+  select f.cohort_date, count(*) as retained
+  from public.user_first_activity f
+  join public.daily_activity a
+    on a.user_id = f.user_id and a.activity_date = f.cohort_date + 7
+  group by f.cohort_date
+),
+d30 as (
+  select f.cohort_date, count(*) as retained
+  from public.user_first_activity f
+  join public.daily_activity a
+    on a.user_id = f.user_id and a.activity_date = f.cohort_date + 30
+  group by f.cohort_date
+)
+select
+  c.cohort_date,
+  c.cohort_size,
+  coalesce(d1.retained, 0) as d1_retained,
+  round(100.0 * coalesce(d1.retained, 0) / c.cohort_size, 1) as d1_pct,
+  coalesce(d7.retained, 0) as d7_retained,
+  round(100.0 * coalesce(d7.retained, 0) / c.cohort_size, 1) as d7_pct,
+  coalesce(d30.retained, 0) as d30_retained,
+  round(100.0 * coalesce(d30.retained, 0) / c.cohort_size, 1) as d30_pct
+from cohorts c
+left join d1 on d1.cohort_date = c.cohort_date
+left join d7 on d7.cohort_date = c.cohort_date
+left join d30 on d30.cohort_date = c.cohort_date
+order by c.cohort_date;
+
+revoke all on public.retention_by_cohort from anon, authenticated;

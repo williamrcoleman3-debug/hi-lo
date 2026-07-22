@@ -1,4 +1,4 @@
-import { DECKS, DEFAULT_DECK_ID, computeUnlockedDecks } from "../engine/decks.js";
+import { DECKS, ACTIVE_DECKS, DEFAULT_DECK_ID, computeUnlockedDecks } from "../engine/decks.js";
 import { THEME_IDS } from "../themes/registry.js";
 
 const STORAGE_KEY = "hilo:progress:v1";
@@ -28,10 +28,22 @@ export function loadProgress() {
     // Merge over defaults so progress saved before a field existed (e.g.
     // equippedTheme, added later) still loads with a sane value instead of
     // undefined, without needing a version bump for every additive field.
-    return { ...defaultProgress(), ...parsed };
+    return sanitizeSelectedDeck({ ...defaultProgress(), ...parsed });
   } catch {
     return defaultProgress();
   }
+}
+
+// A browser's saved selectedDeck can predate a deck being feature-flagged
+// off (see engine/decks.js's ACTIVE_DECKS) — the merge above would
+// otherwise let that stale value win over the current default, silently
+// landing the player on a deck that's supposed to be unreachable, with no
+// UI path back (DeckSwitcher hides itself once there's only one active
+// deck). Snap back to DEFAULT_DECK_ID whenever the saved selection isn't
+// currently active.
+function sanitizeSelectedDeck(progress) {
+  if (ACTIVE_DECKS.some((d) => d.id === progress.selectedDeck)) return progress;
+  return { ...progress, selectedDeck: DEFAULT_DECK_ID };
 }
 
 export function saveProgress(progress) {

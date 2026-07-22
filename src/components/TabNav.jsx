@@ -13,6 +13,8 @@ const PRIMARY_TABS = [
 const OVERFLOW_TABS = [
   { id: "unlocks", label: "Unlocks" },
   { id: "stats", label: "Stats" },
+  { id: "referrals", label: "Referrals" },
+  { id: "lifelines", label: "Lifelines" },
   { id: "rules", label: "Rules" },
   { id: "feedback", label: "Feedback" },
 ];

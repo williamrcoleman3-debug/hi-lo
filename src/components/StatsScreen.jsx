@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { fetchMyDeckStats } from "../stats/stats.js";
 
-export function StatsScreen({ userId, profile }) {
+export function StatsScreen({ userId }) {
   const C = useThemeTokens();
   const [deckStats, setDeckStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -64,56 +64,35 @@ export function StatsScreen({ userId, profile }) {
           Loading…
         </div>
       ) : (
-        <>
-          <div className="w-full max-w-4xl rounded-xl overflow-hidden mb-6" style={{ border: `1px solid ${C.border}` }}>
-            <div
-              className="grid grid-cols-3 gap-4 px-4 py-2 text-[10px] uppercase tracking-widest"
-              style={{ background: C.panel, color: C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}
-            >
-              <span>Deck</span>
-              <span>Games Played</span>
-              <span>Hands Won</span>
-            </div>
-            {deckStats.perDeck.map((d) => (
-              <div
-                key={d.deckId}
-                className="grid grid-cols-3 gap-4 px-4 py-2 text-sm"
-                style={{ borderTop: `1px solid ${C.border}` }}
-              >
-                <span>{d.deckName}</span>
-                <span style={{ color: C.textPrimary }}>{d.gamesPlayed.toLocaleString()}</span>
-                <span style={{ color: C.gold }}>{d.handsWon.toLocaleString()}</span>
-              </div>
-            ))}
-            <div
-              className="grid grid-cols-3 gap-4 px-4 py-2 text-sm font-semibold"
-              style={{ borderTop: `1px solid ${C.border}`, background: C.panel }}
-            >
-              <span>Lifetime total</span>
-              <span style={{ color: C.textPrimary }}>{deckStats.totals.gamesPlayed.toLocaleString()}</span>
-              <span style={{ color: C.gold }}>{deckStats.totals.handsWon.toLocaleString()}</span>
-            </div>
+        <div className="w-full max-w-4xl rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+          <div
+            className="grid grid-cols-3 gap-4 px-4 py-2 text-[10px] uppercase tracking-widest"
+            style={{ background: C.panel, color: C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            <span>Deck</span>
+            <span>Games Played</span>
+            <span>Hands Won</span>
           </div>
-
-          <div className="w-full max-w-4xl grid grid-cols-2 gap-4">
-            <div className="rounded-xl p-4 text-sm" style={{ border: `1px solid ${C.border}` }}>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
-                Referred signups
-              </div>
-              <div className="text-2xl font-semibold" style={{ color: C.textPrimary }}>
-                {(profile?.referred_signups_count ?? 0).toLocaleString()}
-              </div>
+          {deckStats.perDeck.map((d) => (
+            <div
+              key={d.deckId}
+              className="grid grid-cols-3 gap-4 px-4 py-2 text-sm"
+              style={{ borderTop: `1px solid ${C.border}` }}
+            >
+              <span>{d.deckName}</span>
+              <span style={{ color: C.textPrimary }}>{d.gamesPlayed.toLocaleString()}</span>
+              <span style={{ color: C.gold }}>{d.handsWon.toLocaleString()}</span>
             </div>
-            <div className="rounded-xl p-4 text-sm" style={{ border: `1px solid ${C.border}` }}>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
-                Qualified referrals
-              </div>
-              <div className="text-2xl font-semibold" style={{ color: C.gold }}>
-                {(profile?.qualified_referral_count ?? 0).toLocaleString()}
-              </div>
-            </div>
+          ))}
+          <div
+            className="grid grid-cols-3 gap-4 px-4 py-2 text-sm font-semibold"
+            style={{ borderTop: `1px solid ${C.border}`, background: C.panel }}
+          >
+            <span>Lifetime total</span>
+            <span style={{ color: C.textPrimary }}>{deckStats.totals.gamesPlayed.toLocaleString()}</span>
+            <span style={{ color: C.gold }}>{deckStats.totals.handsWon.toLocaleString()}</span>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

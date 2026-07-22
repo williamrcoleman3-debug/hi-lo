@@ -27,18 +27,25 @@
 --   referred_by             — set once, at signup, via attribute_referral()
 --                             below. First attribution wins; never overwritten.
 --   has_banked_ever         — flips true on this account's first-ever Bank.
---                             Used only to detect "this is the qualifying
---                             moment" for a referral reward — a referred
---                             user only ever pays out their referrer once.
+--                             Informational only — NOT what gates the
+--                             referral reward (see has_played_ever below).
+--   has_played_ever         — flips true on this account's first-ever
+--                             COMPLETED GAME (bust or bank, whichever comes
+--                             first). This is what gates the referral
+--                             reward — a referred user only ever pays out
+--                             their referrer once, on their very first
+--                             game, regardless of outcome.
 --   referral_reward_granted — guards that one-time payout specifically (set
 --                             on the REFERRED user's own row).
 --   referred_signups_count  — raw count of accounts created via this user's
 --                             referral link, qualified or not.
---   qualified_referral_count — count of those signups that went on to bank
---                             at least once (email verification is implicit
---                             under our OTP-only auth — there's no
---                             unverified-email state to check separately).
+--   qualified_referral_count — count of those signups that went on to
+--                             complete at least one game, bust or bank
+--                             (email verification is implicit under our
+--                             OTP-only auth — there's no unverified-email
+--                             state to check separately).
 --   lifeline_balance        — spendable "Save the Game" lifeline count.
+--                             New accounts start with 1, free.
 --   spendable_tokens        — a SEPARATE pooled balance from
 --                             leaderboard_scores.cumulative_banked (which
 --                             must never decrease — it's the permanent
@@ -56,10 +63,11 @@ create table public.profiles (
   is_contest_banned boolean not null default false,
   referred_by uuid references public.profiles (id),
   has_banked_ever boolean not null default false,
+  has_played_ever boolean not null default false,
   referral_reward_granted boolean not null default false,
   referred_signups_count integer not null default 0,
   qualified_referral_count integer not null default 0,
-  lifeline_balance integer not null default 0,
+  lifeline_balance integer not null default 1,
   spendable_tokens bigint not null default 0,
   created_at timestamptz not null default now()
 );
@@ -163,11 +171,13 @@ revoke all on public.daily_activity from anon, authenticated;
 -- peak-framed text over the default bank/bust text, without a separate
 -- client-side read-then-compare (which could race).
 --
--- On an actual Bank, this also: adds to spendable_tokens (the lifeline-
+-- On an actual Bank, this also adds to spendable_tokens (the lifeline-
 -- redemption pool — separate from cumulative_banked, which must never
--- decrease), and, the FIRST time this account ever banks, pays out a
--- one-time referral reward (5 lifelines + a qualified-referral credit) to
--- whoever referred them, if anyone did and it hasn't already been paid.
+-- decrease). And, regardless of Bank or Bust, the FIRST time this account
+-- ever completes a game at all, pays out a one-time referral reward (5
+-- lifelines + a qualified-referral credit) to whoever referred them, if
+-- anyone did and it hasn't already been paid — deliberately not gated on
+-- banking, just on having played one game, ever.
 create function public.record_game_end(
   p_deck_id text,
   p_amount bigint,
@@ -184,7 +194,7 @@ declare
   v_longest int;
   v_gap int;
   v_prev_peak bigint;
-  v_had_banked_before boolean;
+  v_had_played_before boolean;
   v_referred_by uuid;
   v_reward_granted boolean;
 begin
@@ -225,9 +235,30 @@ begin
     peak_score = greatest(public.leaderboard_scores.peak_score, p_amount),
     updated_at = now();
 
+  -- One-time referral payout: on this account's very first completed game
+  -- EVER (bust or bank, whichever comes first) — independent of the
+  -- p_was_banked branch below, which only handles Daily Streak /
+  -- spendable_tokens.
+  select has_played_ever, referred_by, referral_reward_granted
+    into v_had_played_before, v_referred_by, v_reward_granted
+    from public.profiles
+   where id = auth.uid();
+
+  if not coalesce(v_had_played_before, false) then
+    update public.profiles set has_played_ever = true where id = auth.uid();
+
+    if v_referred_by is not null and not coalesce(v_reward_granted, false) then
+      update public.profiles set referral_reward_granted = true where id = auth.uid();
+      update public.profiles
+         set lifeline_balance = lifeline_balance + 5,
+             qualified_referral_count = qualified_referral_count + 1
+       where id = v_referred_by;
+    end if;
+  end if;
+
   if p_was_banked then
-    select last_banked_date, current_streak, longest_streak, has_banked_ever, referred_by, referral_reward_granted
-      into v_last, v_current, v_longest, v_had_banked_before, v_referred_by, v_reward_granted
+    select last_banked_date, current_streak, longest_streak
+      into v_last, v_current, v_longest
       from public.profiles
      where id = auth.uid();
 
@@ -251,15 +282,6 @@ begin
              longest_streak = v_longest,
              last_banked_date = v_today
        where id = auth.uid();
-    end if;
-
-    -- One-time referral payout: only on this account's very first bank ever.
-    if not coalesce(v_had_banked_before, false) and v_referred_by is not null and not coalesce(v_reward_granted, false) then
-      update public.profiles set referral_reward_granted = true where id = auth.uid();
-      update public.profiles
-         set lifeline_balance = lifeline_balance + 5,
-             qualified_referral_count = qualified_referral_count + 1
-       where id = v_referred_by;
     end if;
   end if;
 

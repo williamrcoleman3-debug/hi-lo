@@ -12,6 +12,8 @@ import { LeaderboardScreen } from "./components/LeaderboardScreen";
 import { UnlocksScreen } from "./components/UnlocksScreen";
 import { RulesScreen } from "./components/RulesScreen";
 import { StatsScreen } from "./components/StatsScreen";
+import { ReferralScreen } from "./components/ReferralScreen";
+import { LifelinesScreen } from "./components/LifelinesScreen";
 import { FeedbackScreen } from "./components/FeedbackScreen";
 
 // Single source of truth for auth + progress, resolved once here so the
@@ -114,7 +116,18 @@ function AppShell({
         />
       </div>
       <div className="w-full flex flex-col items-center" style={{ display: tab === "stats" ? "flex" : "none" }}>
-        <StatsScreen userId={userId} profile={profile} />
+        <StatsScreen userId={userId} />
+      </div>
+      <div className="w-full flex flex-col items-center" style={{ display: tab === "referrals" ? "flex" : "none" }}>
+        <ReferralScreen userId={userId} profile={profile} />
+      </div>
+      <div className="w-full flex flex-col items-center" style={{ display: tab === "lifelines" ? "flex" : "none" }}>
+        <LifelinesScreen
+          userId={userId}
+          profile={profile}
+          refreshProfile={refreshProfile}
+          onViewReferrals={() => setTab("referrals")}
+        />
       </div>
       <div className="w-full flex flex-col items-center" style={{ display: tab === "rules" ? "flex" : "none" }}>
         <RulesScreen />

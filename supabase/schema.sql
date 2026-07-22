@@ -239,10 +239,19 @@ begin
   -- EVER (bust or bank, whichever comes first) — independent of the
   -- p_was_banked branch below, which only handles Daily Streak /
   -- spendable_tokens.
+  --
+  -- `for update` locks this user's own row for the has_played_ever /
+  -- referral_reward_granted check — without it, two concurrent calls for
+  -- the same account's first-ever game (e.g. the same account open in two
+  -- tabs, each finishing a game at nearly the same moment) could both read
+  -- the flags as not-yet-set before either commits, and both pay out the
+  -- referrer. The lock serializes them: the second call blocks until the
+  -- first commits, then correctly sees the flags already set and no-ops.
   select has_played_ever, referred_by, referral_reward_granted
     into v_had_played_before, v_referred_by, v_reward_granted
     from public.profiles
-   where id = auth.uid();
+   where id = auth.uid()
+   for update;
 
   if not coalesce(v_had_played_before, false) then
     update public.profiles set has_played_ever = true where id = auth.uid();
@@ -346,6 +355,14 @@ grant execute on function public.record_deck_progress(text, integer, boolean, bo
 -- inflate a referrer's count. Self-referral is rejected. Does not require
 -- being signed in via a special role — any authenticated user can attribute
 -- their OWN signup (auth.uid()), never someone else's.
+--
+-- The check-then-act here (read referred_by, decide, then write) would race
+-- if this ever fired twice concurrently for the same account — both calls
+-- could read referred_by as still null before either commits, and both
+-- would then increment referred_signups_count on a referrer. `for update`
+-- locks this user's own row for the check, so a second concurrent call
+-- blocks until the first commits, then correctly sees referred_by already
+-- set and no-ops.
 create function public.attribute_referral(p_referrer_username text) returns table (success boolean)
 language plpgsql
 security definer
@@ -359,7 +376,10 @@ begin
     raise exception 'must be signed in';
   end if;
 
-  select referred_by is not null into v_already_referred from public.profiles where id = auth.uid();
+  select referred_by is not null into v_already_referred
+    from public.profiles
+   where id = auth.uid()
+   for update;
   if coalesce(v_already_referred, false) then
     return query select false;
     return;

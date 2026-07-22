@@ -27,9 +27,15 @@ export async function makeServerCall(sessionId, call) {
     drawnCard: row.drawn_card,
     banked: row.banked,
     winStreak: row.win_streak,
+    // "cashed" here means the session already auto-finalized server-side
+    // (a lifeline-used game that just cleared the full deck) -- voluntary
+    // banking is disabled after a lifeline use, so this is the only way
+    // that payout can ever be collected. No separate bankSession() call
+    // is needed or possible once this comes back.
     status: row.status,
     gain: row.gain,
     cardsLeft: row.cards_left,
+    isNewPeak: row.is_new_peak,
   };
 }
 

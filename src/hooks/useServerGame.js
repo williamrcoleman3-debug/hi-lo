@@ -189,14 +189,29 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
               setTimeout(() => setJustClimbed(false), 400);
               spawnToast(`+${result.gain.toLocaleString()}`);
               fireFlash("win");
-              setAwaitingAdvance(true);
-              setMessage(
-                call === "same"
-                  ? `Same rank! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
-                  : call === "red" || call === "black"
-                  ? `${call === "red" ? "Red" : "Black"}! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
-                  : `Correct — win streak ${result.winStreak}. +${result.gain.toLocaleString()} tokens. Tap to keep going.`
-              );
+
+              if (result.status === "cashed") {
+                // The server already auto-finalized this session as a win
+                // (a lifeline-used game that just cleared the full deck --
+                // see make_call's full-clear check). Voluntary banking was
+                // disabled the moment a lifeline was used, so this is the
+                // only way that payout could ever be collected. Nothing
+                // left to call here -- reflect the result directly, don't
+                // fire bankSession() again (there's nothing left to finalize).
+                setTotalTokens((t) => t + result.banked);
+                setStatus("cashed");
+                setMessage(`Cleared the deck! Banked ${result.banked.toLocaleString()} points.`);
+                onGameEnd?.(deckConfig.id, { amount: result.banked, wasBanked: true, isNewPeak: result.isNewPeak });
+              } else {
+                setAwaitingAdvance(true);
+                setMessage(
+                  call === "same"
+                    ? `Same rank! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
+                    : call === "red" || call === "black"
+                    ? `${call === "red" ? "Red" : "Black"}! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
+                    : `Correct — win streak ${result.winStreak}. +${result.gain.toLocaleString()} tokens. Tap to keep going.`
+                );
+              }
             } else if (lifelineAvailable) {
               setPendingBustCard(result.drawnCard);
               setStatus("lifeline-offer");
@@ -219,7 +234,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
         }
       })();
     },
-    [status, revealing, awaitingAdvance, sessionId, lifelineAvailable, winStreak, banked, spawnToast, fireFlash, resolveBust]
+    [status, revealing, awaitingAdvance, sessionId, lifelineAvailable, winStreak, banked, spawnToast, fireFlash, resolveBust, deckConfig, onGameEnd]
   );
 
   const useLifeline = useCallback(async () => {

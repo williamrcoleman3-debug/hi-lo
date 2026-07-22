@@ -35,6 +35,7 @@ export function GameScreenView({
   timeLeft,
   probs,
   growths,
+  lifelinesUsedThisGame,
   makeCall,
   advanceHand,
   cashOut,
@@ -289,7 +290,14 @@ export function GameScreenView({
               </button>
             )}
 
-            {status === "playing" && banked > 0 && (
+            {/* Hidden entirely (not just disabled) once a lifeline has been
+                used this game -- using a lifeline to survive a near-bust
+                and then banking the resulting payout let a single run
+                generate far more tokens than the lifeline cost. From that
+                point on the only ways this game ends are busting (0
+                tokens) or actually clearing the full deck, which pays out
+                automatically -- see useServerGame's "cashed" handling. */}
+            {status === "playing" && banked > 0 && !lifelinesUsedThisGame && (
               <button
                 onClick={cashOut}
                 className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
@@ -297,6 +305,12 @@ export function GameScreenView({
               >
                 Bank {banked.toLocaleString()} points
               </button>
+            )}
+
+            {status === "playing" && !!lifelinesUsedThisGame && (
+              <div className="w-full text-center rounded-xl px-4 py-2 mb-2 text-xs" style={{ border: `1px dashed ${C.border}`, color: C.textMuted }}>
+                Banking is off after using a lifeline this game — bust or clear the whole deck to end it.
+              </div>
             )}
 
             {(status === "busted" || status === "cashed") && (

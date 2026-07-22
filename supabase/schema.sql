@@ -973,12 +973,76 @@ create table public.game_sessions (
   ever_red_black_hit boolean not null default false,
   lowest_same_odds double precision,
   status text not null default 'playing' check (status in ('playing', 'lifeline-offer', 'busted', 'cashed')),
+  -- One timestamp appended per make_call, win or lose -- piggybacked onto
+  -- that function's existing per-hand UPDATE (no separate write path). Used
+  -- only by analyze_call_timing() below for manual review before a prize
+  -- payout; never read on any live gameplay path.
+  call_timestamps timestamptz[] not null default array[]::timestamptz[],
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.game_sessions enable row level security;
 revoke all on public.game_sessions from anon, authenticated;
+
+-- Per-user request budget for the session RPCs below -- a fixed 1-second
+-- window, keyed only on auth.uid() (never IP, never anything about the
+-- network the request came from, so real players who happen to share a
+-- wifi network can never throttle each other). A cheap, single-row upsert;
+-- see check_rate_limit() for the actual check, called first thing in every
+-- session RPC.
+create table public.rate_limit_state (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  window_start timestamptz not null default now(),
+  request_count int not null default 0
+);
+
+alter table public.rate_limit_state enable row level security;
+revoke all on public.rate_limit_state from anon, authenticated;
+
+-- 10 requests/second/user -- roughly 5x the fastest a human could possibly
+-- cycle through the real UI (the 500ms reveal delay plus an instantly-
+-- clicked Skip past the post-win pause puts an absolute human ceiling
+-- around 2/sec; real sustained play is far slower). Comfortably above any
+-- legitimate pace, including someone with multiple tabs open, while still
+-- capping what would otherwise be unbounded automated throughput. Called
+-- as the very first statement in every session RPC -- a single indexed
+-- upsert, not a scan, so it adds negligible latency to a real request.
+create or replace function public.check_rate_limit() returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_max_per_window constant int := 10;
+  v_window_start timestamptz;
+  v_count int;
+  v_now timestamptz := clock_timestamp();
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  insert into public.rate_limit_state (user_id, window_start, request_count)
+  values (auth.uid(), v_now, 1)
+  on conflict (user_id) do update set
+    window_start = case
+      when v_now - public.rate_limit_state.window_start >= interval '1 second' then v_now
+      else public.rate_limit_state.window_start
+    end,
+    request_count = case
+      when v_now - public.rate_limit_state.window_start >= interval '1 second' then 1
+      else public.rate_limit_state.request_count + 1
+    end
+  returning window_start, request_count into v_window_start, v_count;
+
+  if v_count > v_max_per_window then
+    raise exception 'rate limit exceeded -- slow down';
+  end if;
+end;
+$$;
+
+revoke all on function public.check_rate_limit() from public, anon, authenticated;
 
 -- Starts a fresh session: shuffles a full shoe server-side (CSPRNG), holds
 -- the shoe minus its first card, and returns only that first card plus the
@@ -998,6 +1062,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   v_deck := public.crypto_shuffle(public.build_full_deck(p_deck_id));
   v_compare := v_deck[1];
@@ -1022,8 +1087,19 @@ grant execute on function public.start_game(text) to authenticated;
 -- drawn card as `pending_card` and flips to 'lifeline-offer' so the client
 -- can still choose to spend a lifeline (see use_lifeline_in_session) before
 -- the game is finalized via bust_session.
+--
+-- Exploit fix: once a lifeline has been used this session, voluntary
+-- banking is disabled (see bank_session) to close a bootstrapping loop
+-- where a lifeline-saved near-bust could be cashed out for far more tokens
+-- than the lifeline cost. The only two outcomes left from that point on are
+-- busting (0 tokens) or actually clearing the full deck -- so reaching the
+-- full-clear target on a lifeline-used session auto-finalizes as a win
+-- right here, since the player has no other way to collect the payout.
+-- Lifeline-free play is completely untouched: this block only ever runs
+-- when lifelines_used > 0, so a normal game can still climb past the
+-- target and bank whenever the player chooses, exactly as before.
 create or replace function public.make_call(p_session_id uuid, p_call text)
-returns table (correct boolean, drawn_card jsonb, banked bigint, win_streak int, status text, gain bigint, cards_left int)
+returns table (correct boolean, drawn_card jsonb, banked bigint, win_streak int, status text, gain bigint, cards_left int, is_new_peak boolean)
 language plpgsql
 security definer
 set search_path = public, extensions
@@ -1045,10 +1121,13 @@ declare
   v_true_same_prob double precision;
   v_n int;
   v_k int;
+  v_full_clear_target int;
+  v_is_new_peak boolean;
 begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   if p_call not in ('higher', 'lower', 'same', 'red', 'black') then
     raise exception 'invalid call';
@@ -1121,19 +1200,29 @@ begin
              when p_call = 'same' then least(lowest_same_odds, v_true_same_prob)
              else lowest_same_odds
            end,
+           call_timestamps = call_timestamps || clock_timestamp(),
            updated_at = now()
      where id = p_session_id;
 
-    return query select true, v_drawn, v_new_banked, v_new_streak, 'playing'::text, v_gain, array_length(v_deck, 1);
+    v_full_clear_target := array_length(public.deck_suits(v_session.deck_id), 1) * 13 * public.deck_copies(v_session.deck_id) - 1;
+
+    if v_session.lifelines_used > 0 and v_new_streak >= v_full_clear_target then
+      select f.is_new_peak into v_is_new_peak from public.finalize_session(p_session_id, true) as f;
+      return query select true, v_drawn, v_new_banked, v_new_streak, 'cashed'::text, v_gain, array_length(v_deck, 1), v_is_new_peak;
+      return;
+    end if;
+
+    return query select true, v_drawn, v_new_banked, v_new_streak, 'playing'::text, v_gain, array_length(v_deck, 1), false;
   else
     update public.game_sessions
        set deck = v_deck,
            pending_card = v_drawn,
            status = 'lifeline-offer',
+           call_timestamps = call_timestamps || clock_timestamp(),
            updated_at = now()
      where id = p_session_id;
 
-    return query select false, v_drawn, v_session.banked, v_session.win_streak, 'lifeline-offer'::text, 0::bigint, array_length(v_deck, 1);
+    return query select false, v_drawn, v_session.banked, v_session.win_streak, 'lifeline-offer'::text, 0::bigint, array_length(v_deck, 1), false;
   end if;
 end;
 $$;
@@ -1159,6 +1248,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select * into v_session from public.game_sessions
    where id = p_session_id and user_id = auth.uid() and public.game_sessions.status = 'lifeline-offer'
@@ -1354,6 +1444,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select user_id, status into v_owner, v_status from public.game_sessions where id = p_session_id for update;
   if v_owner is null or v_owner <> auth.uid() then
@@ -1372,6 +1463,17 @@ grant execute on function public.bust_session(uuid) to authenticated;
 
 -- Public entry point for banking -- only valid mid-game with something
 -- actually banked, exactly mirroring the client's existing cashOut guard.
+--
+-- Exploit fix: rejects outright once a lifeline has been used this
+-- session. Using a lifeline to survive a near-bust and then banking the
+-- resulting (often much larger) payout let a single lucky/well-played run
+-- generate far more tokens than the lifeline(s) it cost -- a bootstrapping
+-- loop that undermined both the 10,000-token lifeline price and the pull
+-- toward actually referring friends. From the moment a lifeline is used,
+-- the only two ways this game can end are busting (0 tokens) or genuinely
+-- clearing the full deck, which auto-finalizes from within make_call
+-- itself (see that function) since voluntary banking is no longer
+-- available to collect it. Lifeline-free games are entirely unaffected.
 create or replace function public.bank_session(p_session_id uuid)
 returns table (is_new_peak boolean)
 language plpgsql
@@ -1382,12 +1484,15 @@ declare
   v_owner uuid;
   v_status text;
   v_banked bigint;
+  v_lifelines_used int;
 begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
-  select user_id, status, banked into v_owner, v_status, v_banked from public.game_sessions where id = p_session_id for update;
+  select user_id, status, banked, lifelines_used into v_owner, v_status, v_banked, v_lifelines_used
+    from public.game_sessions where id = p_session_id for update;
   if v_owner is null or v_owner <> auth.uid() then
     raise exception 'no such session';
   end if;
@@ -1396,6 +1501,9 @@ begin
   end if;
   if v_banked <= 0 then
     raise exception 'nothing banked yet';
+  end if;
+  if v_lifelines_used > 0 then
+    raise exception 'banking is disabled after using a lifeline this game -- bust or clear the deck to end it';
   end if;
 
   return query select * from public.finalize_session(p_session_id, true);
@@ -1414,3 +1522,78 @@ grant execute on function public.bank_session(uuid) to authenticated;
 -- ---------------------------------------------------------------------------
 revoke all on function public.record_game_end(text, bigint, boolean) from authenticated, anon, public;
 revoke all on function public.record_deck_progress(text, integer, boolean, boolean, double precision) from authenticated, anon, public;
+
+-- ---------------------------------------------------------------------------
+-- Timing-anomaly review, for manual inspection before a prize payout -- NOT
+-- a live gameplay check, not automated enforcement. Reads game_sessions.
+-- call_timestamps (piggybacked onto make_call's existing per-hand write,
+-- see that table/function above) and reports how uniform/fast the gaps
+-- between hands were. A human decides what to do with the output; this
+-- just flags, it never blocks or bans. No EXECUTE grant to any client
+-- role -- callable only from the SQL editor's own elevated access, same
+-- lockdown pattern as finalize_session/referrer_engagement.
+--
+-- suspiciously_uniform: a real player's reaction time naturally varies
+-- hand to hand; a coefficient of variation (stddev / mean) below 0.15 means
+-- the gaps were unusually consistent -- worth a human's attention, not
+-- proof of anything on its own.
+-- implausibly_fast: a gap under 300ms is faster than a human can plausibly
+-- perceive the reveal, decide, and click, even accounting for network
+-- latency working in the player's favor.
+create or replace function public.analyze_call_timing(p_session_id uuid)
+returns table (
+  hand_count int,
+  mean_gap_seconds numeric,
+  stddev_gap_seconds numeric,
+  coefficient_of_variation numeric,
+  min_gap_seconds numeric,
+  max_gap_seconds numeric,
+  suspiciously_uniform boolean,
+  implausibly_fast boolean
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  with ts as (
+    select call_timestamps from public.game_sessions where id = p_session_id
+  ),
+  gaps as (
+    select extract(epoch from (ts.call_timestamps[i] - ts.call_timestamps[i - 1])) as gap_seconds
+    from ts, generate_subscripts(ts.call_timestamps, 1) as i
+    where i > 1
+  )
+  select
+    (select array_length(call_timestamps, 1) from ts),
+    round(avg(gap_seconds)::numeric, 3),
+    round(stddev(gap_seconds)::numeric, 3),
+    round((stddev(gap_seconds) / nullif(avg(gap_seconds), 0))::numeric, 3),
+    round(min(gap_seconds)::numeric, 3),
+    round(max(gap_seconds)::numeric, 3),
+    coalesce(stddev(gap_seconds) / nullif(avg(gap_seconds), 0) < 0.15, false),
+    coalesce(min(gap_seconds) < 0.3, false)
+  from gaps;
+$$;
+
+revoke all on function public.analyze_call_timing(uuid) from public, anon, authenticated;
+
+-- Convenience for finding which session to run analyze_call_timing() on --
+-- a reviewer looking at a specific player's contest-record streak can find
+-- the right session_id here rather than needing to already know it.
+create or replace function public.find_sessions_for_review(p_username text)
+returns table (session_id uuid, deck_id text, win_streak int, status text, hand_count int, created_at timestamptz)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select gs.id, gs.deck_id, gs.win_streak, gs.status, array_length(gs.call_timestamps, 1), gs.created_at
+    from public.game_sessions gs
+    join public.profiles p on p.id = gs.user_id
+   where lower(p.username) = lower(p_username)
+   order by gs.win_streak desc, gs.created_at desc
+   limit 20;
+$$;
+
+revoke all on function public.find_sessions_for_review(text) from public, anon, authenticated;

@@ -426,6 +426,16 @@ grant execute on function public.attribute_referral(text) to authenticated;
 -- Redeems 10,000 spendable_tokens for one lifeline. spendable_tokens is a
 -- separate pool from the permanent Total Token Score record
 -- (leaderboard_scores.cumulative_banked), which this never touches.
+--
+-- BUG FIX: this function's RETURNS TABLE names two OUT parameters
+-- (lifeline_balance, spendable_tokens) that are ALSO real column names on
+-- profiles. PL/pgSQL exposes OUT parameters as variables visible inside the
+-- function body, so an unqualified `lifeline_balance` or `spendable_tokens`
+-- in a query is ambiguous between "the OUT param" and "the profiles
+-- column" — Postgres raises "column reference ... is ambiguous" and the
+-- whole call errors. The UPDATE's SET clause now qualifies the right-hand
+-- side with public.profiles.<col> to force it to mean the column, not the
+-- OUT param.
 create function public.redeem_lifeline() returns table (success boolean, lifeline_balance integer, spendable_tokens bigint)
 language plpgsql
 security definer
@@ -447,8 +457,8 @@ begin
   end if;
 
   update public.profiles
-     set spendable_tokens = spendable_tokens - v_cost,
-         lifeline_balance = lifeline_balance + 1
+     set spendable_tokens = public.profiles.spendable_tokens - v_cost,
+         lifeline_balance = public.profiles.lifeline_balance + 1
    where id = auth.uid();
 
   return query
@@ -462,6 +472,13 @@ grant execute on function public.redeem_lifeline() to authenticated;
 -- Spends one lifeline from the account balance (the per-game cap of 2 is
 -- enforced client-side in useGame, since it's per-game session state, not
 -- account state). Atomic so two tabs can't both spend the same last lifeline.
+--
+-- BUG FIX: same ambiguous-column issue as redeem_lifeline() above —
+-- `lifeline_balance` is both an OUT parameter and a profiles column, so the
+-- UPDATE's unqualified RHS was ambiguous and errored on every call. This is
+-- what made "Save the Game" appear to do nothing: the client's onUseLifeline
+-- call always failed, so useGame.js's useLifeline() always fell through to
+-- its failure branch and busted normally.
 create function public.use_lifeline() returns table (success boolean, lifeline_balance integer)
 language plpgsql
 security definer
@@ -481,7 +498,7 @@ begin
     return;
   end if;
 
-  update public.profiles set lifeline_balance = lifeline_balance - 1 where id = auth.uid();
+  update public.profiles set lifeline_balance = public.profiles.lifeline_balance - 1 where id = auth.uid();
 
   return query select true, p.lifeline_balance from public.profiles p where p.id = auth.uid();
 end;
@@ -522,9 +539,13 @@ $$;
 revoke all on function public.get_single_deck_win_streak_leaderboard() from public;
 grant execute on function public.get_single_deck_win_streak_leaderboard() to anon, authenticated;
 
--- Leaderboard 2: lifetime hands won, summed across all four decks — safe to
--- combine since it's a raw count, not a deck-scaled currency. Not affected
--- by is_contest_banned (that exclusion is Single Deck Win Streak only).
+-- Leaderboard 2: hands won on Single Deck. Was summed across all four
+-- decks back when all four were active/reachable; now that only Single
+-- Deck is (see engine/decks.js's ACTIVE_DECKS), filtered down to just that
+-- deck so the number means what the label says. Not affected by
+-- is_contest_banned (that exclusion is Single Deck Win Streak only).
+-- Revert the deck_id filter (and reword the client-side blurb back) if
+-- more decks are ever re-enabled and this should combine again.
 create function public.get_total_hands_won_leaderboard()
 returns table (username text, total_hands_won bigint)
 language sql
@@ -535,6 +556,7 @@ as $$
   select p.username, sum(dp.hands_won) as total_hands_won
     from public.deck_progress dp
     join public.profiles p on p.id = dp.user_id
+   where dp.deck_id = 'single-deck'
    group by p.id, p.username
   having sum(dp.hands_won) > 0
    order by total_hands_won desc

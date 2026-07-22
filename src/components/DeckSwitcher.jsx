@@ -1,11 +1,17 @@
 import { useThemeTokens } from "../themes/ThemeContext";
-import { DECKS, UNLOCK_REQUIREMENTS, RANKS } from "../engine";
+import { ACTIVE_DECKS, UNLOCK_REQUIREMENTS, RANKS } from "../engine";
 
+// Hides itself entirely when there's only one (or zero) active deck to
+// choose from — no point showing a switcher with a single option. Reads
+// ACTIVE_DECKS, not the full DECKS roster, so re-enabling more decks later
+// makes this reappear automatically with no changes needed here.
 export function DeckSwitcher({ selectedDeck, unlockedDecks, deckProgress, onSelect }) {
   const C = useThemeTokens();
+  if (ACTIVE_DECKS.length <= 1) return null;
+
   return (
     <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
-      {DECKS.map((deck) => {
+      {ACTIVE_DECKS.map((deck) => {
         const unlocked = unlockedDecks.includes(deck.id);
         const selected = deck.id === selectedDeck;
         const requirement = UNLOCK_REQUIREMENTS[deck.id];
@@ -37,7 +43,7 @@ export function DeckSwitcher({ selectedDeck, unlockedDecks, deckProgress, onSele
               <div className="text-[10px] mt-1 leading-snug" style={{ color: C.textMuted }}>
                 {requirement.description}
                 {" — "}
-                {deckProgress[DECKS[DECKS.findIndex((d) => d.id === deck.id) - 1].id].bestWinStreak}/10 best win streak
+                {deckProgress[ACTIVE_DECKS[ACTIVE_DECKS.findIndex((d) => d.id === deck.id) - 1].id].bestWinStreak}/10 best win streak
               </div>
             )}
           </button>

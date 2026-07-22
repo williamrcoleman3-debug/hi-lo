@@ -66,10 +66,12 @@ export const THEMES = [
     id: THEME_IDS.POKER_TABLE,
     name: "Poker Table",
     preview: { colors: ["#1c5b43", "#4a2c1a", "#f2c96b"] },
-    // Piggybacks directly on the existing Single Deck unlock condition — one
-    // achievement (10-hand win streak + Same + Red/Black at Double Suit), two rewards.
-    isUnlocked: (ctx) => ctx.unlockedDecks.includes("single-deck"),
-    unlockDescription: "Unlocks at Single Deck",
+    // Used to gate on reaching Single Deck — that stopped making sense once
+    // Single Deck became available immediately with nothing to progress
+    // from (see engine/decks.js's ACTIVE_DECKS). Unlocked by default now,
+    // same as Classic.
+    isUnlocked: () => true,
+    unlockDescription: null,
     tokens: pokerTableTokens,
   },
 ];

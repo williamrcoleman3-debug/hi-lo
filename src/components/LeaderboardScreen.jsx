@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
-import { DECKS } from "../engine";
+import { ACTIVE_DECKS } from "../engine";
 import {
   fetchLeaderboard,
   fetchSingleDeckWinStreakLeaderboard,
@@ -21,19 +21,28 @@ const STREAK_BOARDS = [
   { id: "longest", label: "Longest Daily Streak Ever", blurb: "Permanent bragging rights — doesn't disappear just because a current streak broke." },
 ];
 
+// Medals for the top 3, explicit numeric rank for everyone else — every
+// entry on every board shows what place it's in, not just 1-3.
+const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+function rankDisplay(i) {
+  return RANK_MEDALS[i] ?? `#${i + 1}`;
+}
+
 function LeaderboardTable({ columns, rows, loading, loadError, emptyMessage }) {
   const C = useThemeTokens();
+  const gridTemplateColumns = ["40px", ...columns.map((c) => c.width ?? "auto")].join(" ");
   return (
     <div className="w-full max-w-4xl rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
       <div
         className="grid gap-4 px-4 py-2 text-[10px] uppercase tracking-widest"
         style={{
-          gridTemplateColumns: columns.map((c) => c.width ?? "auto").join(" "),
+          gridTemplateColumns,
           background: C.panel,
           color: C.textMuted,
           fontFamily: "'IBM Plex Mono', monospace",
         }}
       >
+        <span>#</span>
         {columns.map((c) => (
           <span key={c.header}>{c.header}</span>
         ))}
@@ -60,8 +69,11 @@ function LeaderboardTable({ columns, rows, loading, loadError, emptyMessage }) {
           <div
             key={i}
             className="grid gap-4 px-4 py-2 text-sm"
-            style={{ gridTemplateColumns: columns.map((c) => c.width ?? "auto").join(" "), borderTop: `1px solid ${C.border}` }}
+            style={{ gridTemplateColumns, borderTop: `1px solid ${C.border}` }}
           >
+            <span style={{ color: i < 3 ? C.gold : C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}>
+              {rankDisplay(i)}
+            </span>
             {columns.map((c) => (
               <span key={c.header} style={c.color ? { color: c.color(row) } : undefined}>
                 {c.render(row)}
@@ -115,9 +127,12 @@ function SimpleLeaderboardSection({ fetcher, deps, blurb, emptyMessage, columns 
   );
 }
 
+// Single Deck only, now that it's the only active deck — was a 4-board
+// deck-selector, collapsed to one board per Part 1/2 (no switcher makes
+// sense with a single option).
 function TokenScoreSection() {
   const C = useThemeTokens();
-  const [deckId, setDeckId] = useState(DECKS[0].id);
+  const deck = ACTIVE_DECKS[0];
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -126,7 +141,7 @@ function TokenScoreSection() {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchLeaderboard(deckId)
+    fetchLeaderboard(deck.id)
       .then((data) => {
         if (!cancelled) {
           setRows(data);
@@ -142,32 +157,12 @@ function TokenScoreSection() {
     return () => {
       cancelled = true;
     };
-  }, [deckId]);
-
-  const deck = DECKS.find((d) => d.id === deckId);
+  }, [deck.id]);
 
   return (
     <>
-      <div className="w-full max-w-4xl grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        {DECKS.map((d) => (
-          <button
-            key={d.id}
-            onClick={() => setDeckId(d.id)}
-            className="rounded-xl px-3 py-2 text-sm font-semibold transition-transform active:scale-95"
-            style={
-              d.id === deckId
-                ? { border: `2px solid ${C.gold}`, background: C.goldSoft, color: C.gold }
-                : { border: `2px solid ${C.border}`, color: C.textPrimary, background: "transparent" }
-            }
-          >
-            {d.name}
-          </button>
-        ))}
-      </div>
-
       <p className="w-full max-w-4xl text-xs mb-3" style={{ color: C.textMuted }}>
-        Lifetime total of everything actually locked in via Bank on {deck.name} — busts don't count. Separate per
-        deck since ante scales by deck.
+        Lifetime total of everything actually locked in via Bank on {deck.name} — busts don't count.
       </p>
 
       <LeaderboardTable
@@ -309,7 +304,7 @@ export function LeaderboardScreen() {
         <SimpleLeaderboardSection
           fetcher={fetchTotalHandsWonLeaderboard}
           deps={[]}
-          blurb="Lifetime hands won, combined across all four decks — a raw count, safe to combine unlike token totals."
+          blurb="Lifetime hands won on Single Deck."
           emptyMessage="No hands won yet — be the first."
           columns={[
             { header: "Player", render: (r) => r.username, width: "1fr" },

@@ -44,6 +44,18 @@
 --                             (email verification is implicit under our
 --                             OTP-only auth — there's no unverified-email
 --                             state to check separately).
+--                             DELIBERATE TRADEOFF: this bar used to require
+--                             an actual Bank (at least one correct call).
+--                             Loosened to "any completed game" so a single
+--                             tap-and-bust now qualifies — meaningfully
+--                             easier to farm with throwaway accounts than
+--                             before, which the bank requirement was
+--                             specifically there to prevent. Accepted for
+--                             now; revisit if farming is actually observed,
+--                             not engineered against preemptively. See
+--                             record_game_end() below for where this is
+--                             enforced, and referrer_engagement further
+--                             down for a way to manually spot-check it.
 --   lifeline_balance        — spendable "Save the Game" lifeline count.
 --                             New accounts start with 1, free.
 --   spendable_tokens        — a SEPARATE pooled balance from
@@ -239,6 +251,16 @@ begin
   -- EVER (bust or bank, whichever comes first) — independent of the
   -- p_was_banked branch below, which only handles Daily Streak /
   -- spendable_tokens.
+  --
+  -- DELIBERATE TRADEOFF, going forward only (not retroactive — this only
+  -- ever evaluates a given account's own first game, whenever that happens
+  -- to occur): this used to require a Bank specifically. Gating on ANY
+  -- completed game instead is a known, accepted loosening — busting takes
+  -- zero skill and one tap, so this reopens some of the throwaway-account
+  -- referral-farming risk the bank requirement was there to prevent. Not
+  -- engineered against preemptively; revisit only if farming is actually
+  -- observed. See referrer_engagement (further down) for a way to manually
+  -- spot-check a referrer's signups-vs-qualified ratio.
   --
   -- `for update` locks this user's own row for the has_played_ever /
   -- referral_reward_granted check — without it, two concurrent calls for
@@ -644,3 +666,34 @@ alter table public.feedback_submissions enable row level security;
 create policy "users can submit their own feedback"
   on public.feedback_submissions for insert
   with check (auth.uid() = user_id);
+
+-- referrer_engagement: per-referrer funnel — signups vs. qualified — for
+-- manually reviewing a cohort of referrers rather than trusting the
+-- headline qualified_referral_count alone. Pure reporting over data
+-- already captured on profiles; no new tracking. "Verified" isn't a
+-- separate column: under OTP-only auth, attribute_referral() only ever
+-- runs after email verification succeeds AND a profile row is created, so
+-- every row counted here is already verified by construction — there's no
+-- unverified-but-attributed state to report separately, hence
+-- verified_count always equals signup_count. Kept as its own column anyway
+-- so the shape matches the requested breakdown and stays self-documenting.
+-- To drill into a specific referrer's individual referred accounts (not
+-- just the aggregate), query profiles directly:
+--   select username, has_played_ever, created_at
+--   from public.profiles where referred_by = '<referrer id>';
+create view public.referrer_engagement as
+select
+  r.id as referrer_id,
+  r.username as referrer_username,
+  r.referred_signups_count as signup_count,
+  r.referred_signups_count as verified_count,
+  r.qualified_referral_count as qualified_count,
+  round(
+    100.0 * r.qualified_referral_count / nullif(r.referred_signups_count, 0),
+    1
+  ) as qualified_pct
+from public.profiles r
+where r.referred_signups_count > 0
+order by r.referred_signups_count desc;
+
+revoke all on public.referrer_engagement from anon, authenticated;

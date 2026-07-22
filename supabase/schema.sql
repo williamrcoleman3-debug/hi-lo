@@ -1044,6 +1044,51 @@ $$;
 
 revoke all on function public.check_rate_limit() from public, anon, authenticated;
 
+-- Per-user count of games STARTED (not completed) on a given UTC calendar
+-- day -- a bust counts against this exactly like a bank, since what this
+-- caps is attempt volume against the $10,000 contest (see check_daily_play_
+-- limit below), not payout. Deliberately separate from daily_activity,
+-- which is a one-row-per-day "were they active" flag for retention
+-- reporting and can't hold a per-day count.
+create table public.daily_game_starts (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  start_date date not null,
+  games_started int not null default 0,
+  primary key (user_id, start_date)
+);
+
+alter table public.daily_game_starts enable row level security;
+revoke all on public.daily_game_starts from anon, authenticated;
+
+-- 101 game starts per user per UTC day -- 100 real attempts plus one extra
+-- for the throwaway first game. Called from start_game() right after
+-- check_rate_limit(); a fresh game_sessions row isn't inserted if this
+-- raises. Resets at UTC midnight since it keys on the server's own
+-- calendar date, never a client-reported one.
+create or replace function public.check_daily_play_limit() returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_daily_limit constant int := 101;
+  v_today date := (now() at time zone 'utc')::date;
+  v_count int;
+begin
+  insert into public.daily_game_starts (user_id, start_date, games_started)
+  values (auth.uid(), v_today, 1)
+  on conflict (user_id, start_date) do update set
+    games_started = public.daily_game_starts.games_started + 1
+  returning games_started into v_count;
+
+  if v_count > v_daily_limit then
+    raise exception 'daily play limit reached -- come back tomorrow';
+  end if;
+end;
+$$;
+
+revoke all on function public.check_daily_play_limit() from public, anon, authenticated;
+
 -- Starts a fresh session: shuffles a full shoe server-side (CSPRNG), holds
 -- the shoe minus its first card, and returns only that first card plus the
 -- session id and how many cards are left. The rest of the shoe never
@@ -1063,6 +1108,7 @@ begin
     raise exception 'must be signed in';
   end if;
   perform public.check_rate_limit();
+  perform public.check_daily_play_limit();
 
   v_deck := public.crypto_shuffle(public.build_full_deck(p_deck_id));
   v_compare := v_deck[1];

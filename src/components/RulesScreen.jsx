@@ -14,12 +14,12 @@ export function RulesScreen() {
         className="w-full max-w-4xl rounded-xl px-4 py-3 mb-6 text-xs"
         style={{ border: `1px solid ${C.emberBorder}`, background: "rgba(122,43,40,0.12)", color: C.textSecondary }}
       >
-        Draft — pending attorney review. Nothing on this page is final legal contest terms; it covers the
-        fraud-enforcement policy only.
+        Draft — pending attorney review. Nothing on this page is final legal contest terms; it covers
+        fraud-enforcement, anti-bot, and manual-review policy only.
       </div>
 
       <div
-        className="w-full max-w-4xl rounded-xl p-4 text-sm"
+        className="w-full max-w-4xl rounded-xl p-4 text-sm mb-4"
         style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
       >
         <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
@@ -30,6 +30,39 @@ export function RulesScreen() {
           the purpose of farming additional lifelines will be banned from the contest specifically — this affects
           eligibility for the Hands Won in a Row (Single Deck) leaderboard only. It does not restrict the rest of
           your account; you can keep playing normally.
+        </p>
+      </div>
+
+      <div
+        className="w-full max-w-4xl rounded-xl p-4 text-sm mb-4"
+        style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
+      >
+        <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
+          Bots &amp; automation
+        </h2>
+        <p>
+          Use of bots, scripts, automated tools, or any non-human-operated software to play the game — including
+          tools that only use information legitimately visible during normal play — is strictly prohibited for
+          purposes of contest eligibility. This applies regardless of whether such automation violates any technical
+          security measure; simulating human play through automated means is prohibited on its own. Any account
+          found, in our sole discretion, to have used such automation will be disqualified from the contest and
+          ineligible for any prize, regardless of whether a qualifying Win Streak was otherwise achieved.
+        </p>
+      </div>
+
+      <div
+        className="w-full max-w-4xl rounded-xl p-4 text-sm"
+        style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
+      >
+        <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
+          Manual review before payout
+        </h2>
+        <p>
+          Any account that achieves a qualifying Win Streak is subject to manual review before any prize is awarded.
+          This review may include, at our discretion, analysis of gameplay patterns, timing data, account history,
+          and any other information relevant to confirming the win was achieved through legitimate human play
+          consistent with these rules. Prize payout may be delayed pending this review. Failure to cooperate with a
+          review request, or discovery of a rules violation during review, may result in forfeiture of the prize.
         </p>
       </div>
     </div>

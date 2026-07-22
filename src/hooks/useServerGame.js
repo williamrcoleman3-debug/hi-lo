@@ -89,7 +89,11 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
       setPendingBustCard(null);
     } catch (err) {
       console.error("startGame failed:", err.message);
-      setMessage("Couldn't start a new game — try again.");
+      setMessage(
+        err.message?.includes("daily play limit")
+          ? "You've hit today's play limit (101 games). Come back after midnight UTC."
+          : "Couldn't start a new game — try again."
+      );
       setStatus("busted");
     }
   }, [deckConfig.id]);

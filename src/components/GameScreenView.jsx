@@ -346,7 +346,7 @@ export function GameScreenView({
           <div className="flex flex-col items-center gap-4 w-full">
             <WinStreakLeaderboardWidget onViewFull={onViewFullLeaderboard} />
             <div
-              className="w-full flex flex-col gap-2 text-xs pt-3"
+              className="hidden sm:flex w-full flex-col gap-2 text-xs pt-3"
               style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}
             >
               <div className="flex justify-between">
@@ -372,7 +372,7 @@ export function GameScreenView({
         </div>
       </div>
 
-      <p className="max-w-4xl text-xs mt-8 text-center leading-relaxed" style={{ color: C.textMuted }}>
+      <p className="hidden sm:block max-w-4xl text-xs mt-8 text-center leading-relaxed" style={{ color: C.textMuted }}>
         Rules: guess whether the next card ranks higher, lower, or the same as the card shown — or skip rank
         entirely and call its color, red or black. Aces are high. Every call is priced off a fresh, full
         shoe for that rank — the price doesn't shrink as matching cards run out, so if you're tracking

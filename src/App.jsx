@@ -24,6 +24,7 @@ const LifelinesScreen = lazy(() =>
   import("./components/LifelinesScreen").then((m) => ({ default: m.LifelinesScreen }))
 );
 const RulesScreen = lazy(() => import("./components/RulesScreen").then((m) => ({ default: m.RulesScreen })));
+const FairnessScreen = lazy(() => import("./components/FairnessScreen").then((m) => ({ default: m.FairnessScreen })));
 const FeedbackScreen = lazy(() => import("./components/FeedbackScreen").then((m) => ({ default: m.FeedbackScreen })));
 
 function TabLoadingFallback() {
@@ -197,6 +198,11 @@ function AppShell({
         {openedTabs.has("rules") && (
           <div className="w-full flex flex-col items-center" style={{ display: tab === "rules" ? "flex" : "none" }}>
             <RulesScreen />
+          </div>
+        )}
+        {openedTabs.has("fairness") && (
+          <div className="w-full flex flex-col items-center" style={{ display: tab === "fairness" ? "flex" : "none" }}>
+            <FairnessScreen />
           </div>
         )}
         {openedTabs.has("feedback") && (

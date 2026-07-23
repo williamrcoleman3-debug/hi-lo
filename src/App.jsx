@@ -7,6 +7,7 @@ import { capturePendingReferral } from "./referral/referral.js";
 import { TabNav } from "./components/TabNav";
 import { AuthWidget } from "./components/AuthWidget";
 import { SiteBanner } from "./components/SiteBanner";
+import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay";
 import { GameScreen } from "./components/GameScreen";
 import { LeaderboardScreen } from "./components/LeaderboardScreen";
 import { UnlocksScreen } from "./components/UnlocksScreen";
@@ -97,7 +98,7 @@ function AppShell({
         <TabNav active={tab} onChange={setTab} />
         <AuthWidget />
       </div>
-      <SiteBanner userId={userId} messages={messages} />
+      {userId ? <SiteBanner messages={messages} /> : <SignedOutTutorialOverlay messages={messages} />}
       {/* All three screens stay mounted so switching tabs doesn't silently
           discard an in-progress game just for checking the leaderboard. */}
       <div className="w-full flex flex-col items-center" style={{ display: tab === "game" ? "flex" : "none" }}>

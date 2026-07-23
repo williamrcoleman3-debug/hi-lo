@@ -2,9 +2,13 @@ import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { isDismissed, dismiss } from "../siteMessages/siteMessages.js";
 
-export function SiteBanner({ userId, messages }) {
+// Signed-in only -- the signed-out equivalent is SignedOutTutorialOverlay
+// now (a full-screen overlay, not a small inline banner), since a
+// first-time visitor needs the contest/mechanics explainer to be
+// impossible to miss, not blended into the page layout.
+export function SiteBanner({ messages }) {
   const C = useThemeTokens();
-  const slot = userId ? "banner_signed_in" : "banner_signed_out";
+  const slot = "banner_signed_in";
   const message = messages[slot];
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
 

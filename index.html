@@ -4,7 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Higher · Lower · Same is a free-to-play card game — guess whether the next card is higher, lower, or the same, build your streak, and bank your winnings. Currently running a real $25,000 cash contest."
+    />
     <title>Higher · Lower · Same</title>
+    <!-- Moved out of index.css's @import so the browser can discover and
+         start fetching these in parallel with the rest of the page load,
+         instead of a serialized HTML -> main CSS -> @import -> font CSS ->
+         font files chain. preconnect warms the connection to both font
+         domains before the stylesheet link even resolves. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

@@ -29,7 +29,7 @@ export default function App() {
     capturePendingReferral();
   }, []);
 
-  const { user, profile, refreshProfile, checkUsernameAvailable, updateUsername, updateAvatar } = useAuth();
+  const { user, profile, refreshProfile, sessionChecked, checkUsernameAvailable, updateUsername, updateAvatar } = useAuth();
   const userId = user?.id ?? null;
   const {
     selectedDeckConfig,
@@ -50,6 +50,7 @@ export default function App() {
         userId={userId}
         profile={profile}
         refreshProfile={refreshProfile}
+        sessionChecked={sessionChecked}
         checkUsernameAvailable={checkUsernameAvailable}
         updateUsername={updateUsername}
         updateAvatar={updateAvatar}
@@ -72,6 +73,7 @@ function AppShell({
   userId,
   profile,
   refreshProfile,
+  sessionChecked,
   checkUsernameAvailable,
   updateUsername,
   updateAvatar,
@@ -98,7 +100,11 @@ function AppShell({
         <TabNav active={tab} onChange={setTab} />
         <AuthWidget />
       </div>
-      {userId ? <SiteBanner messages={messages} /> : <SignedOutTutorialOverlay messages={messages} />}
+      {userId ? (
+        <SiteBanner messages={messages} />
+      ) : (
+        sessionChecked && <SignedOutTutorialOverlay messages={messages} />
+      )}
       {/* All three screens stay mounted so switching tabs doesn't silently
           discard an in-progress game just for checking the leaderboard. */}
       <div className="w-full flex flex-col items-center" style={{ display: tab === "game" ? "flex" : "none" }}>

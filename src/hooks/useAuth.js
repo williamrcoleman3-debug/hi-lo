@@ -9,6 +9,15 @@ export function useAuth() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  // True once the initial supabase.auth.getSession() call has actually
+  // resolved -- distinct from `loading` (which tracks the profile fetch and
+  // goes false almost immediately for a not-yet-known session). Without
+  // this, a visitor who IS signed in would see the signed-out tutorial
+  // overlay flash on screen and then disappear the moment the real session
+  // resolves, since `userId` is null until then. Consumers that must not
+  // show signed-out-only UI during that brief unknown window (see
+  // SignedOutTutorialOverlay) should gate on this, not just on `!userId`.
+  const [sessionChecked, setSessionChecked] = useState(!isSupabaseConfigured);
 
   const fetchProfile = useCallback((userId) => {
     return supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle();
@@ -16,7 +25,10 @@ export function useAuth() {
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setSessionChecked(true);
+    });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => setSession(sess));
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -158,6 +170,7 @@ export function useAuth() {
     user: session?.user ?? null,
     profile,
     loading,
+    sessionChecked,
     sendCode,
     verifyCode,
     createProfile,

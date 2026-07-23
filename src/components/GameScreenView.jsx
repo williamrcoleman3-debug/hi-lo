@@ -240,7 +240,7 @@ export function GameScreenView({
                   onClick={() => makeCall("red")}
                   disabled={callDisabled(probs.pRed)}
                   className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ border: `2px solid ${C.cardRed}`, color: C.cardRed, background: "transparent" }}
+                  style={{ border: `2px solid ${C.lose}`, color: C.lose, background: "transparent" }}
                 >
                   Red
                   <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
@@ -370,6 +370,17 @@ export function GameScreenView({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Reserves the space freed by hiding the stats panel/rules paragraph
+          on mobile (see the hidden sm:* classes above/below), sized to a
+          standard mobile ad unit (320x100, IAB "Large Mobile Banner") --
+          empty for now, no ad-loading logic here. The point is purely to
+          avoid a layout shift later: this page currently has a perfect CLS
+          score, and inserting a differently-sized ad into unreserved space
+          would break that the moment a real ad script lands here. */}
+      <div className="w-full flex justify-center sm:hidden mt-4" aria-hidden="true">
+        <div className="w-[320px] max-w-full h-[100px]" />
       </div>
 
       <p className="hidden sm:block max-w-4xl text-xs mt-8 text-center leading-relaxed" style={{ color: C.textMuted }}>

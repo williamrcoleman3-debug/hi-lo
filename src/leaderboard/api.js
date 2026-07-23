@@ -12,7 +12,7 @@ export async function fetchLeaderboard(deckId) {
 
   const { data, error } = await supabase
     .from("leaderboard_scores")
-    .select("cumulative_banked, updated_at, profiles(username)")
+    .select("cumulative_banked, updated_at, profiles(username, avatar)")
     .eq("deck_id", deckId)
     .gt("cumulative_banked", 0)
     .order("cumulative_banked", { ascending: false })
@@ -22,6 +22,7 @@ export async function fetchLeaderboard(deckId) {
 
   return data.map((row) => ({
     username: row.profiles?.username ?? "anonymous",
+    avatar: row.profiles?.avatar ?? null,
     score: row.cumulative_banked,
     achievedAt: row.updated_at,
   }));
@@ -39,7 +40,12 @@ export async function fetchSingleDeckWinStreakLeaderboard() {
   const { data, error } = await supabase.rpc("get_single_deck_win_streak_leaderboard");
   if (error) throw error;
 
-  return data.map((row) => ({ username: row.username, score: row.best_win_streak, achievedAt: row.updated_at }));
+  return data.map((row) => ({
+    username: row.username,
+    avatar: row.avatar,
+    score: row.best_win_streak,
+    achievedAt: row.updated_at,
+  }));
 }
 
 // Total Hands Won — combined across all four decks (a raw count, safe to
@@ -51,7 +57,7 @@ export async function fetchTotalHandsWonLeaderboard() {
   const { data, error } = await supabase.rpc("get_total_hands_won_leaderboard");
   if (error) throw error;
 
-  return data.map((row) => ({ username: row.username, score: row.total_hands_won }));
+  return data.map((row) => ({ username: row.username, avatar: row.avatar, score: row.total_hands_won }));
 }
 
 const STREAK_COLUMN_BY_BOARD = {

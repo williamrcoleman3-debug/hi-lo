@@ -87,7 +87,14 @@
 --                             spending it never touches any leaderboard.
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  username text not null check (char_length(username) between 2 and 24),
+  -- 2-16 chars, English letters only -- client mirrors this pattern for
+  -- instant feedback (see AuthWidget.jsx), but this constraint is the real
+  -- gate. avatar is one of the curated AVATARS list (src/avatars/
+  -- registry.js), not free-choice -- not worth enforcing membership in that
+  -- exact list server-side, since an off-list value is harmless (just an
+  -- unexpected emoji rendered back to the same account that set it).
+  username text not null check (char_length(username) between 2 and 16 and username ~ '^[A-Za-z]+$'),
+  avatar text not null default '😀',
   current_streak integer not null default 0,
   longest_streak integer not null default 0,
   last_banked_date date,
@@ -540,13 +547,13 @@ grant execute on function public.use_lifeline() to authenticated;
 -- function makes the intentional bypass explicit and keeps its exposed
 -- columns fixed by its RETURNS TABLE signature.
 create function public.get_single_deck_win_streak_leaderboard()
-returns table (username text, best_win_streak integer, updated_at timestamptz)
+returns table (username text, avatar text, best_win_streak integer, updated_at timestamptz)
 language sql
 security definer
 set search_path = public
 stable
 as $$
-  select p.username, dp.best_win_streak, dp.updated_at
+  select p.username, p.avatar, dp.best_win_streak, dp.updated_at
     from public.deck_progress dp
     join public.profiles p on p.id = dp.user_id
    where dp.deck_id = 'single-deck'
@@ -567,17 +574,17 @@ grant execute on function public.get_single_deck_win_streak_leaderboard() to ano
 -- Revert the deck_id filter (and reword the client-side blurb back) if
 -- more decks are ever re-enabled and this should combine again.
 create function public.get_total_hands_won_leaderboard()
-returns table (username text, total_hands_won bigint)
+returns table (username text, avatar text, total_hands_won bigint)
 language sql
 security definer
 set search_path = public
 stable
 as $$
-  select p.username, sum(dp.hands_won) as total_hands_won
+  select p.username, p.avatar, sum(dp.hands_won) as total_hands_won
     from public.deck_progress dp
     join public.profiles p on p.id = dp.user_id
    where dp.deck_id = 'single-deck'
-   group by p.id, p.username
+   group by p.id, p.username, p.avatar
   having sum(dp.hands_won) > 0
    order by total_hands_won desc
    limit 25;

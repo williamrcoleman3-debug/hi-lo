@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "../supabase/client.js";
 import { consumePendingReferral } from "../referral/referral.js";
 
 const PROFILE_COLUMNS =
-  "id, username, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count";
+  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -66,11 +66,11 @@ export function useAuth() {
   );
 
   const createProfile = useCallback(
-    async (username) => {
+    async (username, avatar) => {
       const userId = session?.user?.id;
       const { data, error } = await supabase
         .from("profiles")
-        .insert({ id: userId, username })
+        .insert({ id: userId, username, avatar })
         .select(PROFILE_COLUMNS)
         .single();
       if (!error) {
@@ -97,6 +97,59 @@ export function useAuth() {
     [session?.user?.id]
   );
 
+  // Read-only availability hint for the username field -- UX-only, never
+  // the actual gate. The real enforcement is the case-insensitive unique
+  // index on profiles.username; createProfile/updateUsername below always
+  // re-check via that index regardless of what this returns, so a stale or
+  // raced result here can never let a duplicate through.
+  const checkUsernameAvailable = useCallback(async (username) => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("username", username)
+      .maybeSingle();
+    return !data;
+  }, []);
+
+  // Direct client update, same pattern as equipped_theme -- covered by the
+  // existing "users can update their own profile" RLS policy, no RPC
+  // needed. The unique index is still the real gate here too.
+  const updateUsername = useCallback(
+    async (username) => {
+      const userId = session?.user?.id;
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ username })
+        .eq("id", userId)
+        .select(PROFILE_COLUMNS)
+        .single();
+      if (!error) {
+        setProfile(data);
+        return { data, error: null };
+      }
+      if (error.code === "23505") {
+        return { data: null, error: { message: "That username is taken — try another." } };
+      }
+      return { data: null, error };
+    },
+    [session?.user?.id]
+  );
+
+  const updateAvatar = useCallback(
+    async (avatar) => {
+      const userId = session?.user?.id;
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ avatar })
+        .eq("id", userId)
+        .select(PROFILE_COLUMNS)
+        .single();
+      if (!error) setProfile(data);
+      return { data, error };
+    },
+    [session?.user?.id]
+  );
+
   const signOut = useCallback(() => supabase.auth.signOut(), []);
 
   return {
@@ -108,6 +161,9 @@ export function useAuth() {
     sendCode,
     verifyCode,
     createProfile,
+    checkUsernameAvailable,
+    updateUsername,
+    updateAvatar,
     signOut,
     refreshProfile,
   };

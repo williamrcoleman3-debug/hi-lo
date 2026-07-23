@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
+import { AvatarPicker } from "./AvatarPicker";
+import { UsernameField } from "./UsernameField";
+import { DEFAULT_AVATAR } from "../avatars/registry";
 
 function Modal({ title, onClose, children }) {
   const C = useThemeTokens();
@@ -29,12 +32,24 @@ function Modal({ title, onClose, children }) {
 export function AuthWidget() {
   const C = useThemeTokens();
   const inputStyle = { border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary };
-  const { isSupabaseConfigured, user, profile, loading, sendCode, verifyCode, createProfile, signOut } = useAuth();
+  const {
+    isSupabaseConfigured,
+    user,
+    profile,
+    loading,
+    sendCode,
+    verifyCode,
+    createProfile,
+    checkUsernameAvailable,
+    signOut,
+  } = useAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState("email"); // "email" | "code" | null (mid-verify)
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [username, setUsername] = useState("");
+  const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
+  const [usernameSubmittable, setUsernameSubmittable] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,6 +61,8 @@ export function AuthWidget() {
     setEmail("");
     setCode("");
     setUsername("");
+    setAvatar(DEFAULT_AVATAR);
+    setUsernameSubmittable(false);
     setError(null);
   };
 
@@ -76,7 +93,7 @@ export function AuthWidget() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await createProfile(username);
+    const { error } = await createProfile(username, avatar);
     setBusy(false);
     if (error) setError(error.message);
     else reset();
@@ -85,6 +102,7 @@ export function AuthWidget() {
   if (user && !loading && profile) {
     return (
       <div className="flex items-center gap-3 text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <span aria-hidden="true">{profile.avatar}</span>
         <span style={{ color: C.textSecondary }}>{profile.username}</span>
         {profile.current_streak > 0 && (
           <span style={{ color: C.gold }} title={`${profile.current_streak}-day banking streak`}>
@@ -102,24 +120,29 @@ export function AuthWidget() {
   // form, so a fresh magic-link sign-in can't land the player on this step
   // without noticing it.
   if (user && !loading && !profile) {
+    const canSubmit = !busy && usernameSubmittable;
     return (
-      <Modal title="Welcome — choose a username">
+      <Modal title="Welcome — set up your profile">
         <form onSubmit={handleCreateUsername} className="flex flex-col gap-3">
-          <input
+          <UsernameField
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="username"
-            minLength={2}
-            maxLength={24}
-            required
+            onChange={setUsername}
+            checkUsernameAvailable={checkUsernameAvailable}
+            onSubmittableChange={setUsernameSubmittable}
             autoFocus
-            className="rounded-lg px-3 py-2 text-sm"
-            style={inputStyle}
           />
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs" style={{ color: C.textMuted }}>
+              Pick an avatar
+            </span>
+            <AvatarPicker value={avatar} onChange={setAvatar} />
+          </div>
+
           <button
             type="submit"
-            disabled={busy}
-            className="rounded-lg px-3 py-2 text-sm font-semibold"
+            disabled={!canSubmit}
+            className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
             style={{ background: C.gold, color: "#14161f" }}
           >
             Save and continue

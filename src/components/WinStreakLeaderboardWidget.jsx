@@ -66,6 +66,7 @@ export function WinStreakLeaderboardWidget({ onViewFull }) {
               <span style={{ color: C.textMuted, minWidth: "1.5em", display: "inline-block" }}>
                 {MEDALS[i] ?? `#${i + 1}`}
               </span>
+              {row.avatar && <span aria-hidden="true">{row.avatar}</span>}
               <span style={{ color: C.textPrimary }}>{row.username}</span>
             </span>
             <span style={{ color: C.gold }}>{row.score.toLocaleString()}</span>

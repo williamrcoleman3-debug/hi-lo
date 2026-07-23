@@ -28,7 +28,7 @@ export default function App() {
     capturePendingReferral();
   }, []);
 
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, checkUsernameAvailable, updateUsername, updateAvatar } = useAuth();
   const userId = user?.id ?? null;
   const {
     selectedDeckConfig,
@@ -49,6 +49,9 @@ export default function App() {
         userId={userId}
         profile={profile}
         refreshProfile={refreshProfile}
+        checkUsernameAvailable={checkUsernameAvailable}
+        updateUsername={updateUsername}
+        updateAvatar={updateAvatar}
         selectedDeckConfig={selectedDeckConfig}
         unlockedDecks={unlockedDecks}
         deckProgress={deckProgress}
@@ -68,6 +71,9 @@ function AppShell({
   userId,
   profile,
   refreshProfile,
+  checkUsernameAvailable,
+  updateUsername,
+  updateAvatar,
   selectedDeckConfig,
   unlockedDecks,
   deckProgress,
@@ -114,6 +120,10 @@ function AppShell({
       </div>
       <div className="w-full flex flex-col items-center" style={{ display: tab === "unlocks" ? "flex" : "none" }}>
         <UnlocksScreen
+          profile={profile}
+          checkUsernameAvailable={checkUsernameAvailable}
+          updateUsername={updateUsername}
+          updateAvatar={updateAvatar}
           unlockedThemeIds={unlockedThemeIds}
           equippedTheme={equippedTheme}
           setEquippedTheme={setEquippedTheme}

@@ -171,7 +171,7 @@ function TokenScoreSection() {
         loadError={loadError}
         emptyMessage={`No scores yet on ${deck.name} — be the first.`}
         columns={[
-          { header: "Player", render: (r) => r.username, width: "1fr" },
+          { header: "Player", render: (r) => `${r.avatar ?? ""} ${r.username}`.trim(), width: "1fr" },
           { header: "Score", render: (r) => r.score.toLocaleString(), color: () => C.gold },
           { header: "Achieved", render: (r) => new Date(r.achievedAt).toLocaleDateString(), color: () => C.textMuted },
         ]}
@@ -294,7 +294,7 @@ export function LeaderboardScreen() {
           blurb="The primary board — best-ever Win Streak on Single Deck only. Clearing this deck in one unbroken streak is the goal."
           emptyMessage="No streaks recorded yet on Single Deck — be the first."
           columns={[
-            { header: "Player", render: (r) => r.username, width: "1fr" },
+            { header: "Player", render: (r) => `${r.avatar ?? ""} ${r.username}`.trim(), width: "1fr" },
             { header: "Win Streak", render: (r) => r.score.toLocaleString(), color: () => C.gold },
             { header: "Achieved", render: (r) => new Date(r.achievedAt).toLocaleDateString(), color: () => C.textMuted },
           ]}
@@ -307,7 +307,7 @@ export function LeaderboardScreen() {
           blurb="Lifetime hands won on Single Deck."
           emptyMessage="No hands won yet — be the first."
           columns={[
-            { header: "Player", render: (r) => r.username, width: "1fr" },
+            { header: "Player", render: (r) => `${r.avatar ?? ""} ${r.username}`.trim(), width: "1fr" },
             { header: "Total Hands Won", render: (r) => r.score.toLocaleString() },
           ]}
         />

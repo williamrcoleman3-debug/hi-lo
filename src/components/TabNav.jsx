@@ -16,6 +16,7 @@ const OVERFLOW_TABS = [
   { id: "referrals", label: "Referrals" },
   { id: "lifelines", label: "Lifelines" },
   { id: "rules", label: "Rules" },
+  { id: "fairness", label: "Fairness" },
   { id: "feedback", label: "Feedback" },
 ];
 

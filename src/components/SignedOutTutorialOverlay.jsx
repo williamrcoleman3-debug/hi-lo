@@ -7,20 +7,11 @@ const PAGES = [
     title: "🏆 $25,000 Prize Contest",
     body: (C) => (
       <ul className="flex flex-col gap-2 text-sm" style={{ color: C.textSecondary }}>
-        <li>
-          <strong style={{ color: C.gold }}>$25,000</strong> is up for grabs — awarded to the first player to clear a
-          full <strong>51-hand Win Streak</strong> on Single Deck.
-        </li>
-        <li>
-          If nobody clears the full streak by March 31, 2027, the prize doesn't go unclaimed — it goes to whoever
-          holds the single highest Win Streak record at that point instead.
-        </li>
-        <li>You must be signed in for a game to count — anonymous play never records toward the leaderboard.</li>
-        <li>No purchase necessary to enter or play.</li>
-        <li>Must be 18+ and located in the U.S. (NY and RI excluded).</li>
-        <li style={{ color: C.textMuted }}>
-          This is the quick version — the full Official Rules are in the Rules tab.
-        </li>
+        <li>There's a real $25,000 prize on the line.</li>
+        <li>Make 51 correct calls in a row and it's yours.</li>
+        <li>If nobody clears it by March 31, 2027, the winner will be whoever holds the highest Win Streak at that point.</li>
+        <li>No purchase necessary. Free to play, free to win.</li>
+        <li>Must be 18+ and located in the United States. Void in New York and Rhode Island.</li>
       </ul>
     ),
   },
@@ -28,12 +19,9 @@ const PAGES = [
     title: "🃏 How The Game Works",
     body: (C) => (
       <ul className="flex flex-col gap-2 text-sm" style={{ color: C.textSecondary }}>
-        <li>Each hand, call Higher, Lower, Same, Red, or Black against the current card.</li>
-        <li>Only the current card is ever visible — no seeing ahead, no replaying past hands.</li>
-        <li>
-          Payouts are priced off a static baseline, not the true live odds — tracking which cards have already been
-          dealt can reveal calls that are better than they look.
-        </li>
+        <li>It's an easy game. You're dealt a card, then you pick the next one, higher, lower, the same, red, or black.</li>
+        <li>You're allowed two lifelines per game. A lifeline will let you extend your streak if you pick incorrectly.</li>
+        <li>You get 100 games a day. Good luck.</li>
       </ul>
     ),
   },

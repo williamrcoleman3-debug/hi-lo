@@ -96,7 +96,7 @@ export function GameScreenView({
             className="text-3xl sm:text-4xl font-bold tracking-tight"
             style={{ fontFamily: "'Fraunces', serif", color: C.textPrimary }}
           >
-            Higher · Lower <span style={{ color: C.gold }}>· Same</span>
+            Hi<span style={{ color: C.gold }}>-Lo</span>
           </h1>
           <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
             {tagline ?? "Pick the next card. It's easier if you can remember all the cards you've already seen."}

@@ -737,6 +737,12 @@ revoke all on public.referrer_engagement from anon, authenticated;
 
 create extension if not exists pgcrypto;
 
+-- Lets Postgres functions make outbound HTTP calls (used by
+-- notify_contest_win() further down to hit Mailtrap's Send API). If this
+-- fails with a permissions error, enable it from the Supabase Dashboard
+-- instead: Database -> Extensions -> search "pg_net" -> Enable.
+create extension if not exists pg_net;
+
 -- ---------------------------------------------------------------------------
 -- Deck config helpers -- mirror src/engine/decks.js's DECKS array and
 -- src/engine/constants.js's SUITS/RANKS. Kept as small SQL functions rather
@@ -772,6 +778,17 @@ as $$
     when 'double-deck' then 800
     else null
   end;
+$$;
+
+-- Hands needed for a full shoe clear on a given deck -- shared by make_call
+-- (detects a lifeline-assisted clear mid-hand) and finalize_session (gates
+-- the contest-win email alert further down). Pulled into one function
+-- rather than left as an inline formula in both places so the two can never
+-- drift apart on what "51" actually means.
+create or replace function public.full_clear_target(p_deck_id text) returns int
+language sql
+as $$
+  select array_length(public.deck_suits(p_deck_id), 1) * 13 * public.deck_copies(p_deck_id) - 1;
 $$;
 
 create or replace function public.suit_color(p_suit text) returns text
@@ -1250,7 +1267,7 @@ begin
            updated_at = now()
      where id = p_session_id;
 
-    v_full_clear_target := array_length(public.deck_suits(v_session.deck_id), 1) * 13 * public.deck_copies(v_session.deck_id) - 1;
+    v_full_clear_target := public.full_clear_target(v_session.deck_id);
 
     if v_session.lifelines_used > 0 and v_new_streak >= v_full_clear_target then
       select f.is_new_peak into v_is_new_peak from public.finalize_session(p_session_id, true) as f;
@@ -1332,6 +1349,175 @@ $$;
 
 revoke all on function public.use_lifeline_in_session(uuid) from public;
 grant execute on function public.use_lifeline_in_session(uuid) to authenticated;
+
+-- Small non-secret config for the contest-win email alert below -- the
+-- Mailtrap API token itself is never stored here in plain text, it lives in
+-- Supabase Vault (see the one-off `select vault.create_secret(...)` run
+-- separately, outside this file, with the real token). Fill in the two
+-- rows below with your actual recipient/from addresses before relying on
+-- this -- 'contest_alert_from_email' must match a sender already verified
+-- in your Mailtrap account or Mailtrap will reject the send.
+create table public.app_config (
+  key text primary key,
+  value text not null
+);
+
+alter table public.app_config enable row level security;
+revoke all on public.app_config from anon, authenticated;
+
+insert into public.app_config (key, value) values
+  ('contest_alert_recipient', 'william.r.coleman3@gmail.com'),
+  ('contest_alert_from_email', 'hello@hi-lo-game.com'),
+  ('contest_alert_from_name', 'Hi-Lo Contest Alerts')
+on conflict (key) do update set value = excluded.value;
+
+-- One row per attempted contest-win alert, success or failure -- the whole
+-- point is that a silent failure should still be visible somewhere. Query
+-- this directly, or use check_contest_alert_delivery() further down for a
+-- friendlier view that also confirms Mailtrap actually accepted the send
+-- (not just that this app managed to queue the HTTP request).
+create table public.email_alert_log (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null,
+  session_id uuid,
+  recipient text,
+  subject text,
+  request_id bigint,
+  send_error text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.email_alert_log enable row level security;
+revoke all on public.email_alert_log from anon, authenticated;
+
+-- Fires the contest-win email alert to the site owner the moment a
+-- qualifying Single Deck full clear (51/51) is confirmed -- called from
+-- finalize_session() below, the one shared finalize path used by both the
+-- lifeline-assisted auto-cashout (make_call) and a normal manual bank, so
+-- this only ever needs to be hooked in one place.
+--
+-- Uses pg_net's net.http_post, which is fire-and-forget/async -- this
+-- function queues the HTTP request and returns immediately without waiting
+-- for Mailtrap's response, so a slow or failing email API can never add
+-- latency to, or fail, the player's own bank/bust call. The `exception when
+-- others` wrapper exists for the same reason: whatever goes wrong here
+-- (missing config, a bad token, pg_net not enabled) gets logged to
+-- email_alert_log and swallowed, never propagated back up into the game
+-- transaction that called it.
+create or replace function public.notify_contest_win(p_session_id uuid) returns void
+language plpgsql
+security definer
+set search_path = public, extensions, vault, net
+as $$
+declare
+  v_session public.game_sessions;
+  v_username text;
+  v_email text;
+  v_recipient text;
+  v_from_email text;
+  v_from_name text;
+  v_token text;
+  v_subject text;
+  v_body text;
+  v_request_id bigint;
+begin
+  select * into v_session from public.game_sessions where id = p_session_id;
+  if not found then
+    return;
+  end if;
+
+  select username into v_username from public.profiles where id = v_session.user_id;
+  select email into v_email from auth.users where id = v_session.user_id;
+
+  select value into v_recipient from public.app_config where key = 'contest_alert_recipient';
+  select value into v_from_email from public.app_config where key = 'contest_alert_from_email';
+  select value into v_from_name from public.app_config where key = 'contest_alert_from_name';
+  select decrypted_secret into v_token from vault.decrypted_secrets where name = 'mailtrap_api_token';
+
+  v_subject := format('Contest win: %s just cleared Single Deck (51/51)', coalesce(v_username, v_session.user_id::text));
+
+  v_body := format(
+    E'A qualifying Single Deck Win Streak (51/51) was just confirmed.\n\nThe 1-week manual review clock starts now.\n\nWinner\n  Username: %s\n  Email: %s\n  Account ID: %s\n\nWin\n  Deck: %s\n  Win streak: %s\n  Session ID: %s\n  Confirmed at: %s UTC\n\nTo start the review, run these in the Supabase SQL editor:\n  select * from public.find_sessions_for_review(%L);\n  select * from public.analyze_call_timing(%L);\n',
+    coalesce(v_username, '(unknown)'),
+    coalesce(v_email, '(unknown)'),
+    v_session.user_id,
+    v_session.deck_id,
+    v_session.win_streak,
+    v_session.id,
+    to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS'),
+    v_username,
+    v_session.id
+  );
+
+  if v_recipient is null or v_from_email is null or v_token is null then
+    insert into public.email_alert_log (event_type, session_id, recipient, subject, send_error)
+    values ('contest_win', p_session_id, v_recipient, v_subject, 'missing app_config row or vault secret -- alert not sent');
+    return;
+  end if;
+
+  select net.http_post(
+    url := 'https://send.api.mailtrap.io/api/send',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || v_token,
+      'Content-Type', 'application/json'
+    ),
+    body := jsonb_build_object(
+      'from', jsonb_build_object('email', v_from_email, 'name', coalesce(v_from_name, 'Hi-Lo Contest Alerts')),
+      'to', jsonb_build_array(jsonb_build_object('email', v_recipient)),
+      'subject', v_subject,
+      'text', v_body,
+      'category', 'contest-win-alert'
+    )
+  ) into v_request_id;
+
+  insert into public.email_alert_log (event_type, session_id, recipient, subject, request_id)
+  values ('contest_win', p_session_id, v_recipient, v_subject, v_request_id);
+exception when others then
+  insert into public.email_alert_log (event_type, session_id, recipient, subject, send_error)
+  values ('contest_win', p_session_id, v_recipient, v_subject, sqlerrm);
+end;
+$$;
+
+revoke all on function public.notify_contest_win(uuid) from public, anon, authenticated;
+
+-- Manual check: run this in the SQL editor any time you want to confirm a
+-- contest-win alert was actually queued and sent, not just that
+-- finalize_session ran without error. Deliberately does NOT join against
+-- pg_net's own internal response-tracking table -- its name/schema varies
+-- across pg_net versions and isn't worth depending on here. A non-null
+-- request_id with a null send_error means notify_contest_win successfully
+-- handed the request to pg_net; for actual delivery confirmation (did
+-- Mailtrap accept it, did it bounce), check
+-- https://mailtrap.io/sending/email_logs directly -- that's the
+-- authoritative source regardless of what this function can see.
+create or replace function public.check_contest_alert_delivery()
+returns table (
+  logged_at timestamptz,
+  session_id uuid,
+  recipient text,
+  subject text,
+  request_id bigint,
+  send_error text
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    l.created_at,
+    l.session_id,
+    l.recipient,
+    l.subject,
+    l.request_id,
+    l.send_error
+  from public.email_alert_log l
+  where l.event_type = 'contest_win'
+  order by l.created_at desc
+  limit 25;
+$$;
+
+revoke all on function public.check_contest_alert_delivery() from public, anon, authenticated;
 
 -- Shared finalize logic for both bust_session and bank_session below --
 -- absorbs the ENTIRE previous body of record_game_end() (leaderboard_scores,
@@ -1464,6 +1650,14 @@ begin
              last_banked_date = v_today
        where id = v_session.user_id;
     end if;
+  end if;
+
+  -- Contest-win alert: only a genuine Bank (never a Bust) of a full 51/51
+  -- Single Deck clear qualifies -- deliberately gated to this one deck, not
+  -- any full clear on any deck, since the other decks are hidden/not
+  -- contest-eligible even though their RPCs still technically work.
+  if p_was_banked and v_session.deck_id = 'single-deck' and v_session.win_streak >= public.full_clear_target(v_session.deck_id) then
+    perform public.notify_contest_win(p_session_id);
   end if;
 
   return query select (v_amount > coalesce(v_prev_peak, 0));

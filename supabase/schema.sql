@@ -1,6 +1,26 @@
 -- Hi-Lo Stakes — Phase 4 schema.
 -- Run this once in the Supabase Dashboard: your project -> SQL Editor -> New query -> paste -> Run.
 
+-- =============================================================================
+-- CONTEST INTEGRITY — LEGALLY REQUIRED, NOT A DESIGN PREFERENCE
+--
+-- The $25,000 contest is legally approved ONLY on the condition that players
+-- never pay real money for anything that improves their chances of winning.
+-- This means:
+--
+--   * Tokens must NEVER be purchasable with real currency, under any
+--     circumstance, present or future.
+--   * Any future monetization feature (ads, purchases, subscriptions, etc.)
+--     must be reviewed against this constraint BEFORE implementation, not
+--     after.
+--   * This applies even to indirect paths (e.g. "buy tokens, redeem for
+--     lifelines" violates this just as much as buying lifelines directly).
+--
+-- If in doubt whether a proposed feature crosses this line, treat it as
+-- BLOCKED pending explicit legal review, not as a judgment call to make
+-- unilaterally.
+-- =============================================================================
+
 -- profiles: one row per authenticated user, created on first sign-in.
 -- Username uniqueness is enforced case-insensitively (see the index below)
 -- so "Will" and "will" can't both exist as distinct, confusable usernames.

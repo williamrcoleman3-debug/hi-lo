@@ -447,7 +447,7 @@ begin
 end;
 $$;
 
-revoke all on function public.attribute_referral(text) from public;
+revoke all on function public.attribute_referral(text) from public, anon, authenticated;
 grant execute on function public.attribute_referral(text) to authenticated;
 
 -- Redeems 10,000 spendable_tokens for one lifeline. spendable_tokens is a
@@ -493,7 +493,7 @@ begin
 end;
 $$;
 
-revoke all on function public.redeem_lifeline() from public;
+revoke all on function public.redeem_lifeline() from public, anon, authenticated;
 grant execute on function public.redeem_lifeline() to authenticated;
 
 -- Spends one lifeline from the account balance (the per-game cap of 2 is
@@ -531,7 +531,7 @@ begin
 end;
 $$;
 
-revoke all on function public.use_lifeline() from public;
+revoke all on function public.use_lifeline() from public, anon, authenticated;
 grant execute on function public.use_lifeline() to authenticated;
 
 -- Leaderboard 1 (primary, contest-tracked): best-ever Win Streak on Single
@@ -624,6 +624,7 @@ create policy "site messages are publicly readable"
 create or replace function public.touch_site_messages_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -779,6 +780,7 @@ create extension if not exists pg_net;
 -- ---------------------------------------------------------------------------
 create or replace function public.deck_suits(p_deck_id text) returns text[]
 language sql
+set search_path = public
 as $$
   select case p_deck_id
     when 'single-suit' then array['spades']
@@ -791,12 +793,14 @@ $$;
 
 create or replace function public.deck_copies(p_deck_id text) returns int
 language sql
+set search_path = public
 as $$
   select case p_deck_id when 'double-deck' then 2 when 'single-suit' then 1 when 'double-suit' then 1 when 'single-deck' then 1 else null end;
 $$;
 
 create or replace function public.deck_ante(p_deck_id text) returns bigint
 language sql
+set search_path = public
 as $$
   select case p_deck_id
     when 'single-suit' then 100
@@ -814,18 +818,21 @@ $$;
 -- drift apart on what "51" actually means.
 create or replace function public.full_clear_target(p_deck_id text) returns int
 language sql
+set search_path = public
 as $$
   select array_length(public.deck_suits(p_deck_id), 1) * 13 * public.deck_copies(p_deck_id) - 1;
 $$;
 
 create or replace function public.suit_color(p_suit text) returns text
 language sql
+set search_path = public
 as $$
   select case when p_suit in ('hearts','diamonds') then 'red' when p_suit in ('spades','clubs') then 'mono' else null end;
 $$;
 
 create or replace function public.suit_symbol(p_suit text) returns text
 language sql
+set search_path = public
 as $$
   select case p_suit
     when 'spades' then '♠' when 'clubs' then '♣' when 'hearts' then '♥' when 'diamonds' then '♦'
@@ -838,6 +845,7 @@ $$;
 -- shuffle is a separate step, see crypto_shuffle below).
 create or replace function public.build_full_deck(p_deck_id text) returns jsonb[]
 language plpgsql
+set search_path = public
 as $$
 declare
   v_suits text[] := public.deck_suits(p_deck_id);
@@ -876,6 +884,7 @@ $$;
 -- avoid sign-extension surprises.
 create or replace function public.crypto_shuffle(p_deck jsonb[]) returns jsonb[]
 language plpgsql
+set search_path = public, extensions
 as $$
 declare
   v_arr jsonb[] := p_deck;
@@ -913,6 +922,7 @@ $$;
 -- for display since it needs no secret.
 create or replace function public.calc_baseline_prob(p_deck_id text, p_compare_value int, p_compare_color text, p_call text) returns double precision
 language plpgsql
+set search_path = public
 as $$
 declare
   v_suits text[] := public.deck_suits(p_deck_id);
@@ -967,6 +977,7 @@ $$;
 
 create or replace function public.growth_for(p_prob double precision) returns double precision
 language sql
+set search_path = public
 as $$
   select case when p_prob is null or p_prob <= 0 then 0 else (1 - 0.01) / p_prob end;
 $$;
@@ -978,6 +989,7 @@ $$;
 -- column further down). Computed server-side since it needs the real deck.
 create or replace function public.calc_true_same_prob(p_deck jsonb[], p_compare_value int) returns double precision
 language plpgsql
+set search_path = public
 as $$
 declare
   v_n int := array_length(p_deck, 1);
@@ -1166,7 +1178,7 @@ begin
 end;
 $$;
 
-revoke all on function public.start_game(text) from public;
+revoke all on function public.start_game(text) from public, anon, authenticated;
 grant execute on function public.start_game(text) to authenticated;
 
 -- The one call-resolution endpoint. Draws the next card from the server's
@@ -1317,7 +1329,7 @@ begin
 end;
 $$;
 
-revoke all on function public.make_call(uuid, text) from public;
+revoke all on function public.make_call(uuid, text) from public, anon, authenticated;
 grant execute on function public.make_call(uuid, text) to authenticated;
 
 -- Spends one lifeline to forgive the pending wrong call: the win streak
@@ -1374,7 +1386,7 @@ begin
 end;
 $$;
 
-revoke all on function public.use_lifeline_in_session(uuid) from public;
+revoke all on function public.use_lifeline_in_session(uuid) from public, anon, authenticated;
 grant execute on function public.use_lifeline_in_session(uuid) to authenticated;
 
 -- Small non-secret config for the contest-win email alert below -- the
@@ -1725,7 +1737,7 @@ begin
 end;
 $$;
 
-revoke all on function public.bust_session(uuid) from public;
+revoke all on function public.bust_session(uuid) from public, anon, authenticated;
 grant execute on function public.bust_session(uuid) to authenticated;
 
 -- Public entry point for banking -- only valid mid-game with something
@@ -1777,7 +1789,7 @@ begin
 end;
 $$;
 
-revoke all on function public.bank_session(uuid) from public;
+revoke all on function public.bank_session(uuid) from public, anon, authenticated;
 grant execute on function public.bank_session(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------

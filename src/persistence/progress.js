@@ -1,5 +1,4 @@
 import { DECKS, ACTIVE_DECKS, DEFAULT_DECK_ID, computeUnlockedDecks } from "../engine/decks.js";
-import { THEME_IDS } from "../themes/registry.js";
 
 const STORAGE_KEY = "hilo:progress:v1";
 
@@ -15,7 +14,6 @@ export function defaultProgress() {
     selectedDeck: DEFAULT_DECK_ID,
     unlockedDecks: computeUnlockedDecks(deckProgress),
     deckProgress,
-    equippedTheme: THEME_IDS.CLASSIC,
     gameMode: "bank",
   };
 }
@@ -26,9 +24,9 @@ export function loadProgress() {
     if (!raw) return defaultProgress();
     const parsed = JSON.parse(raw);
     if (parsed?.version !== 1) return defaultProgress();
-    // Merge over defaults so progress saved before a field existed (e.g.
-    // equippedTheme, added later) still loads with a sane value instead of
-    // undefined, without needing a version bump for every additive field.
+    // Merge over defaults so progress saved before a field existed still
+    // loads with a sane value instead of undefined, without needing a
+    // version bump for every additive field.
     return sanitizeSelectedDeck({ ...defaultProgress(), ...parsed });
   } catch {
     return defaultProgress();
@@ -77,14 +75,6 @@ export function applyCorrectCall(progress, deckId, call, { winStreak, trueProbs 
 export function selectDeck(progress, deckId) {
   if (!progress.unlockedDecks.includes(deckId)) return progress;
   return { ...progress, selectedDeck: deckId };
-}
-
-// `unlockedThemeIds` is passed in rather than recomputed here, since it's
-// derived from unlockedDecks (see themes/registry.js#computeUnlockedThemes)
-// and the caller already has it.
-export function selectTheme(progress, themeId, unlockedThemeIds) {
-  if (!unlockedThemeIds.includes(themeId)) return progress;
-  return { ...progress, equippedTheme: themeId };
 }
 
 // No unlock gating -- Bank/Speed is a plain preference available to

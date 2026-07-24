@@ -1,16 +1,13 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
-import { THEMES } from "../themes/registry";
 import { BADGES } from "../badges/registry";
-import { UnlockCard } from "./UnlockCard";
-import { ThemePreviewOverlay } from "./ThemePreviewOverlay";
 import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
 import { isMuted, setMuted } from "../audio/sound.js";
 
 function ComingSoon({ label, C }) {
   return (
-    <div className="rounded-xl p-4 text-sm" style={{ border: `1px dashed ${C.border}`, color: C.textMuted }}>
+    <div className="rounded-lg p-4 text-sm" style={{ border: `1px dashed ${C.border}`, color: C.textMuted }}>
       {label}
     </div>
   );
@@ -72,7 +69,7 @@ function ProfileSection({ profile, checkUsernameAvailable, updateUsername, updat
           Profile
         </h2>
         <div
-          className="rounded-xl p-4 flex items-center gap-4"
+          className="rounded-lg p-4 flex items-center gap-4"
           style={{ border: `1px solid ${C.border}` }}
         >
           <span className="text-2xl" aria-hidden="true">{profile.avatar}</span>
@@ -98,7 +95,7 @@ function ProfileSection({ profile, checkUsernameAvailable, updateUsername, updat
       </h2>
       <form
         onSubmit={handleSave}
-        className="rounded-xl p-4 flex flex-col gap-3"
+        className="rounded-lg p-4 flex flex-col gap-3"
         style={{ border: `1px solid ${C.border}` }}
       >
         <UsernameField
@@ -115,7 +112,7 @@ function ProfileSection({ profile, checkUsernameAvailable, updateUsername, updat
             type="submit"
             disabled={busy || !usernameSubmittable}
             className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
-            style={{ background: C.gold, color: "#14161f" }}
+            style={{ background: C.accent, color: C.cardInk }}
           >
             Save
           </button>
@@ -141,7 +138,7 @@ function GameModeSection({ gameMode, setGameMode }) {
   const C = useThemeTokens();
   const optionStyle = (active) =>
     active
-      ? { border: `2px solid ${C.gold}`, background: C.goldSoft, color: C.gold }
+      ? { border: `2px solid ${C.accent}`, background: C.accentSoft, color: C.accent }
       : { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" };
 
   return (
@@ -152,7 +149,7 @@ function GameModeSection({ gameMode, setGameMode }) {
       <div className="grid grid-cols-2 gap-2 mb-2">
         <button
           onClick={() => setGameMode("bank")}
-          className="rounded-xl px-3 py-3 text-left transition-transform active:scale-95"
+          className="rounded-lg px-3 py-3 text-left transition-transform active:scale-95"
           style={optionStyle(gameMode !== "speed")}
         >
           <div className="text-sm font-semibold">Bank Mode</div>
@@ -162,7 +159,7 @@ function GameModeSection({ gameMode, setGameMode }) {
         </button>
         <button
           onClick={() => setGameMode("speed")}
-          className="rounded-xl px-3 py-3 text-left transition-transform active:scale-95"
+          className="rounded-lg px-3 py-3 text-left transition-transform active:scale-95"
           style={optionStyle(gameMode === "speed")}
         >
           <div className="text-sm font-semibold">Speed Mode</div>
@@ -195,7 +192,7 @@ function SoundSection() {
         Sound
       </h2>
       <div
-        className="rounded-xl p-4 flex items-center justify-between"
+        className="rounded-lg p-4 flex items-center justify-between"
         style={{ border: `1px solid ${C.border}` }}
       >
         <span className="text-sm" style={{ color: C.textPrimary }}>
@@ -207,7 +204,7 @@ function SoundSection() {
           style={
             muted
               ? { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" }
-              : { background: C.gold, color: "#14161f" }
+              : { background: C.accent, color: C.cardInk }
           }
         >
           {muted ? "Off" : "On"}
@@ -222,21 +219,15 @@ export function UnlocksScreen({
   checkUsernameAvailable,
   updateUsername,
   updateAvatar,
-  unlockedThemeIds,
-  equippedTheme,
-  setEquippedTheme,
   gameMode,
   setGameMode,
 }) {
   const C = useThemeTokens();
-  const [previewThemeId, setPreviewThemeId] = useState(null);
 
   return (
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ fontFamily: "'Fraunces', serif" }}>
-          Unlocks
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Unlocks</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
           Cosmetic rewards earned through play — equipping one never affects the odds or payouts.
         </p>
@@ -253,37 +244,12 @@ export function UnlocksScreen({
 
       <SoundSection />
 
-      <section className="w-full max-w-4xl mb-8">
-        <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>
-          Themes
-        </h2>
-        <div className="flex flex-col gap-2">
-          {THEMES.map((theme) => {
-            const unlocked = unlockedThemeIds.includes(theme.id);
-            return (
-              <UnlockCard
-                key={theme.id}
-                name={theme.name}
-                previewColors={theme.preview.colors}
-                locked={!unlocked}
-                conditionText={theme.unlockDescription}
-                equipped={unlocked && theme.id === equippedTheme}
-                onEquip={unlocked ? () => setEquippedTheme(theme.id) : undefined}
-                onPreview={!unlocked ? () => setPreviewThemeId(theme.id) : undefined}
-              />
-            );
-          })}
-        </div>
-      </section>
-
       <section className="w-full max-w-4xl">
         <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>
           Badges
         </h2>
         {BADGES.length === 0 ? <ComingSoon label="Coming soon." C={C} /> : <div className="flex flex-col gap-2" />}
       </section>
-
-      {previewThemeId && <ThemePreviewOverlay themeId={previewThemeId} onClose={() => setPreviewThemeId(null)} />}
     </div>
   );
 }

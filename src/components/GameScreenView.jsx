@@ -1,4 +1,5 @@
 import { useThemeTokens } from "../themes/ThemeContext";
+import { FONT_TABULAR } from "../themes/registry.js";
 import { HOUSE_EDGE, TIMER_MS, RANKS } from "../engine";
 import { Card } from "./Card";
 import { WinStreakLeaderboardWidget } from "./WinStreakLeaderboardWidget";
@@ -53,15 +54,15 @@ export function GameScreenView({
 
   const shoeSize = selectedDeckConfig.suits.length * RANKS.length * selectedDeckConfig.deckCopies;
   const timerPct = Math.max(0, (timeLeft / TIMER_MS) * 100);
-  const timerColor = timerPct > 50 ? C.teal : timerPct > 20 ? C.gold : C.lose;
+  const timerColor = timerPct > 50 ? C.accent : timerPct > 20 ? C.caution : C.lose;
 
   const messageStyle =
     status === "busted"
-      ? { border: `1px solid ${C.emberBorder}`, background: "rgba(122,43,40,0.15)", color: C.ember }
+      ? { border: `1px solid ${C.lose}`, background: C.loseSoft, color: C.lose }
       : status === "cashed"
-      ? { border: `1px solid ${C.teal}`, background: C.tealSoft, color: C.teal }
+      ? { border: `1px solid ${C.accent}`, background: C.accentSoft, color: C.accent }
       : awaitingAdvance
-      ? { border: `1px solid ${C.win}`, background: "rgba(61,220,132,0.1)", color: C.win }
+      ? { border: `1px solid ${C.win}`, background: C.winSoft, color: C.win }
       : { border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary };
 
   const callDisabled = (p) => revealing || p <= 0;
@@ -69,12 +70,12 @@ export function GameScreenView({
   // Glow only, never a size change (would shift layout) -- intensity ramps
   // with the current streak and caps at streak 10, so it never keeps
   // escalating forever. Two stacked shadows read as a stronger glow at
-  // higher intensity without needing to parse C.gold's color format to
+  // higher intensity without needing to parse C.accent's color format to
   // vary its opacity channel.
   const streakGlowIntensity = Math.min(winStreak, 10) / 10;
   const streakGlowStyle =
     winStreak > 0
-      ? { textShadow: `0 0 ${4 + streakGlowIntensity * 6}px ${C.gold}, 0 0 ${8 + streakGlowIntensity * 14}px ${C.gold}` }
+      ? { textShadow: `0 0 ${4 + streakGlowIntensity * 6}px ${C.accent}, 0 0 ${8 + streakGlowIntensity * 14}px ${C.accent}` }
       : {};
 
   return (
@@ -83,7 +84,7 @@ export function GameScreenView({
         <div
           className="pointer-events-none fixed inset-0 z-50"
           style={{
-            background: flash === "win" ? C.winFlashOverlay : C.loseFlashOverlay,
+            background: flash === "win" ? C.winFlash : C.loseFlash,
             transition: "opacity 0.18s ease-out",
           }}
         />
@@ -91,11 +92,7 @@ export function GameScreenView({
 
       <div className="pointer-events-none fixed top-24 right-6 z-50 flex flex-col items-end gap-1">
         {toasts.map((t) => (
-          <div
-            key={t.id}
-            className="float-toast text-lg font-bold"
-            style={{ color: C.win, fontFamily: "'IBM Plex Mono', monospace" }}
-          >
+          <div key={t.id} className="float-toast text-lg font-bold" style={{ color: C.win, ...FONT_TABULAR }}>
             {t.text}
           </div>
         ))}
@@ -104,30 +101,29 @@ export function GameScreenView({
       {/* Header */}
       <div className="w-full max-w-4xl flex items-center justify-between mb-6">
         <div>
-          <h1
-            className="text-3xl sm:text-4xl font-bold tracking-tight"
-            style={{ fontFamily: "'Fraunces', serif", color: C.textPrimary }}
-          >
-            Hi<span style={{ color: C.gold }}>-Lo</span>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: C.textPrimary }}>
+            Hi<span style={{ color: C.accent }}>-Lo</span>
           </h1>
           <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
             {tagline ?? "Pick the next card. It's easier if you can remember all the cards you've already seen."}
           </p>
         </div>
-        <div className="text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-          <div className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
+        <div className="text-right">
+          <div className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
             vault
           </div>
-          <div className="text-2xl font-semibold" style={{ color: C.gold }}>
+          <div className="text-2xl font-semibold" style={{ color: C.accent, ...FONT_TABULAR }}>
             {totalTokens.toLocaleString()}
           </div>
           {userId && (
             <div className="mt-1 flex items-center justify-end gap-2 text-xs">
-              <span style={{ color: C.textMuted }}>🛟 {profile?.lifeline_balance ?? 0} lifeline{profile?.lifeline_balance === 1 ? "" : "s"}</span>
+              <span style={{ color: C.textMuted, ...FONT_TABULAR }}>
+                🛟 {profile?.lifeline_balance ?? 0} lifeline{profile?.lifeline_balance === 1 ? "" : "s"}
+              </span>
               <button
                 onClick={handleRedeemLifeline}
                 className="underline"
-                style={{ color: C.teal }}
+                style={{ color: C.accent }}
                 title="Redeem tokens for 1 lifeline"
               >
                 redeem
@@ -135,7 +131,7 @@ export function GameScreenView({
             </div>
           )}
           {lifelineNotice && (
-            <div className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>
+            <div className="text-xs mt-0.5" style={{ color: C.textMuted }}>
               {lifelineNotice}
             </div>
           )}
@@ -151,35 +147,28 @@ export function GameScreenView({
         />
       </div>
 
-      {/* The table itself — this is what gets the wooden-rail frame in Poker
-          Table (tableFrameBorder/tableFrameShadow are "none" for Classic). */}
-      <div
-        className="w-full max-w-4xl p-4 sm:p-6"
-        style={{ border: C.tableFrameBorder, boxShadow: C.tableFrameShadow, borderRadius: 16 }}
-      >
+      <div className="w-full max-w-4xl p-4 sm:p-6">
         <div className="w-full grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-8">
           {/* Table */}
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-6 mb-2">
               <div className="flex flex-col items-center gap-2">
-                <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
+                <span className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
                   current
                 </span>
                 <Card card={compareCard} pop={sessionSpeedMode && justWon} />
               </div>
               <div className="flex flex-col items-center gap-2">
-                <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
+                <span className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
                   next
                 </span>
                 <Card card={revealedCard} hidden={!revealedCard} pop={revealing || !!revealedCard} />
               </div>
             </div>
 
-            <div
-              className="text-[11px] uppercase tracking-widest mb-3"
-              style={{ color: C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}
-            >
-              {cardsLeft} cards left in the shoe · ante {selectedDeckConfig.ante.toLocaleString()}
+            <div className="text-xs uppercase tracking-widest mb-3 text-center" style={{ color: C.textMuted }}>
+              <span style={FONT_TABULAR}>{cardsLeft}</span> cards left in the shoe · ante{" "}
+              <span style={FONT_TABULAR}>{selectedDeckConfig.ante.toLocaleString()}</span>
             </div>
 
             {status === "playing" && !awaitingAdvance && (
@@ -200,46 +189,47 @@ export function GameScreenView({
               </div>
             )}
 
-            <div
-              className="w-full text-center rounded-xl px-4 py-3 mb-6 text-sm"
-              style={{ ...messageStyle, fontFamily: "'IBM Plex Mono', monospace" }}
-            >
+            <div className="w-full text-center rounded-lg px-4 py-3 mb-6 text-sm" style={messageStyle}>
               {message}
             </div>
 
-            {/* Controls — priced per hand off the deck's static baseline */}
+            {/* Controls — priced per hand off the deck's static baseline.
+                Each call keeps its own solid-fill identity color (unchanged
+                from before) -- none of them is the win/lose signal, since a
+                button's color can't know in advance whether the call will
+                be right. */}
             {status === "playing" && !awaitingAdvance && (
               <div className="w-full grid grid-cols-3 gap-3 mb-4">
                 <button
                   onClick={() => makeCall("lower")}
                   disabled={callDisabled(probs.pLower)}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ border: `2px solid ${C.teal}`, color: C.teal, background: "transparent" }}
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ background: C.callLower, color: C.cardInk }}
                 >
                   Lower
-                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                  <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
                     {probs.pLower > 0 ? `${Math.round(probs.pLower * 100)}% · ×${growths.lower.toFixed(2)}` : "—"}
                   </div>
                 </button>
                 <button
                   onClick={() => makeCall("same")}
                   disabled={callDisabled(probs.pSame)}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ border: `2px solid ${C.gold}`, color: C.gold, background: "transparent" }}
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ background: C.callSame, color: C.textPrimary }}
                 >
                   Same
-                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                  <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
                     {probs.pSame > 0 ? `${Math.round(probs.pSame * 100)}% · ×${growths.same.toFixed(2)}` : "—"}
                   </div>
                 </button>
                 <button
                   onClick={() => makeCall("higher")}
                   disabled={callDisabled(probs.pHigher)}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ border: `2px solid ${C.ember}`, color: C.ember, background: "transparent" }}
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ background: C.callHigher, color: C.cardInk }}
                 >
                   Higher
-                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                  <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
                     {probs.pHigher > 0 ? `${Math.round(probs.pHigher * 100)}% · ×${growths.higher.toFixed(2)}` : "—"}
                   </div>
                 </button>
@@ -251,22 +241,22 @@ export function GameScreenView({
                 <button
                   onClick={() => makeCall("red")}
                   disabled={callDisabled(probs.pRed)}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ border: `2px solid ${C.lose}`, color: C.lose, background: "transparent" }}
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ background: C.callRed, color: C.textPrimary }}
                 >
                   Red
-                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                  <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
                     {probs.pRed > 0 ? `${Math.round(probs.pRed * 100)}% · ×${growths.red.toFixed(2)}` : "—"}
                   </div>
                 </button>
                 <button
                   onClick={() => makeCall("black")}
                   disabled={callDisabled(probs.pBlack)}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ border: `2px solid ${C.textPrimary}`, color: C.textPrimary, background: "transparent" }}
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
+                  style={{ background: C.callBlack, color: C.cardInk }}
                 >
                   Black
-                  <div className="text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                  <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
                     {probs.pBlack > 0 ? `${Math.round(probs.pBlack * 100)}% · ×${growths.black.toFixed(2)}` : "—"}
                   </div>
                 </button>
@@ -277,14 +267,14 @@ export function GameScreenView({
               <div className="w-full grid grid-cols-2 gap-3 mb-4">
                 <button
                   onClick={useLifeline}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95"
-                  style={{ background: C.teal, color: "#0e0e12" }}
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95"
+                  style={{ background: C.accent, color: C.cardInk }}
                 >
                   🛟 Use lifeline
                 </button>
                 <button
                   onClick={declineLifeline}
-                  className="rounded-xl font-semibold py-3 transition-transform active:scale-95"
+                  className="rounded-lg font-semibold py-3 transition-transform active:scale-95"
                   style={{ border: `2px solid ${C.borderStrong}`, color: C.textPrimary, background: "transparent" }}
                 >
                   No, bust
@@ -295,8 +285,8 @@ export function GameScreenView({
             {status === "playing" && awaitingAdvance && (
               <button
                 onClick={advanceHand}
-                className="w-full rounded-xl font-semibold py-3.5 transition-transform active:scale-95 mb-3"
-                style={{ background: C.win, color: "#0e0e12" }}
+                className="w-full rounded-lg font-semibold py-3.5 transition-transform active:scale-95 mb-3"
+                style={{ background: C.win, color: C.cardInk }}
               >
                 Skip →
               </button>
@@ -315,15 +305,15 @@ export function GameScreenView({
             {status === "playing" && banked > 0 && !lifelinesUsedThisGame && !sessionSpeedMode && (
               <button
                 onClick={cashOut}
-                className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
-                style={{ background: C.gold, color: "#14161f" }}
+                className="w-full rounded-lg font-semibold py-3 transition-transform active:scale-95 mb-2"
+                style={{ background: C.accent, color: C.cardInk }}
               >
-                Bank {banked.toLocaleString()} points
+                Bank <span style={FONT_TABULAR}>{banked.toLocaleString()}</span> points
               </button>
             )}
 
             {status === "playing" && (!!lifelinesUsedThisGame || sessionSpeedMode) && (
-              <div className="w-full text-center rounded-xl px-4 py-2 mb-2 text-xs" style={{ border: `1px dashed ${C.border}`, color: C.textMuted }}>
+              <div className="w-full text-center rounded-lg px-4 py-2 mb-2 text-xs" style={{ border: `1px dashed ${C.border}`, color: C.textMuted }}>
                 {sessionSpeedMode
                   ? "Speed Mode has no banking — bust or clear the whole deck to end it."
                   : "Banking is off after using a lifeline this game — bust or clear the whole deck to end it."}
@@ -336,8 +326,8 @@ export function GameScreenView({
                   <>
                     <button
                       onClick={handleShare}
-                      className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
-                      style={{ background: C.teal, color: "#0e0e12" }}
+                      className="w-full rounded-lg font-semibold py-3 transition-transform active:scale-95 mb-2"
+                      style={{ background: C.accent, color: C.cardInk }}
                     >
                       Share
                     </button>
@@ -350,7 +340,7 @@ export function GameScreenView({
                 )}
                 <button
                   onClick={handleStartNewGame}
-                  className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95"
+                  className="w-full rounded-lg font-semibold py-3 transition-transform active:scale-95"
                   style={{ border: `2px solid ${C.borderStrong}`, color: C.textPrimary, background: "transparent" }}
                 >
                   Start new game
@@ -364,23 +354,23 @@ export function GameScreenView({
             <WinStreakLeaderboardWidget onViewFull={onViewFullLeaderboard} />
             <div
               className="hidden sm:flex w-full flex-col gap-2 text-xs pt-3"
-              style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}
+              style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}` }}
             >
               <div className="flex justify-between">
                 <span>cards left</span>
-                <span style={{ color: C.textPrimary }}>{cardsLeft} / {shoeSize}</span>
+                <span style={{ color: C.textPrimary, ...FONT_TABULAR }}>{cardsLeft} / {shoeSize}</span>
               </div>
               <div className="flex justify-between">
                 <span>win streak</span>
-                <span style={{ color: C.textPrimary, ...streakGlowStyle }}>{winStreak}</span>
+                <span style={{ color: C.textPrimary, ...FONT_TABULAR, ...streakGlowStyle }}>{winStreak}</span>
               </div>
               <div className="flex justify-between">
                 <span>at risk</span>
-                <span style={{ color: C.gold }}>{banked.toLocaleString()}</span>
+                <span style={{ color: C.accent, ...FONT_TABULAR }}>{banked.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span>house edge</span>
-                <span style={{ color: C.textPrimary }}>{Math.round(HOUSE_EDGE * 100)}% · every call</span>
+                <span style={{ color: C.textPrimary, ...FONT_TABULAR }}>{Math.round(HOUSE_EDGE * 100)}% · every call</span>
               </div>
             </div>
           </div>

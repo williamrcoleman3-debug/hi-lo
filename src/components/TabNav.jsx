@@ -37,7 +37,7 @@ export function TabNav({ active, onChange }) {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [menuOpen]);
 
-  const activeStyle = { border: `2px solid ${C.gold}`, color: C.gold, background: C.goldSoft };
+  const activeStyle = { border: `2px solid ${C.accent}`, color: C.accent, background: C.accentSoft };
   const inactiveStyle = { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" };
 
   return (
@@ -74,7 +74,7 @@ export function TabNav({ active, onChange }) {
                   setMenuOpen(false);
                 }}
                 className="px-4 py-2 text-sm font-semibold text-left transition-colors"
-                style={active === t.id ? { color: C.gold, background: C.goldSoft } : { color: C.textMuted, background: "transparent" }}
+                style={active === t.id ? { color: C.accent, background: C.accentSoft } : { color: C.textMuted, background: "transparent" }}
               >
                 {t.label}
               </button>

@@ -7,22 +7,16 @@ export function UnlockCard({ name, previewColors, locked, conditionText, equippe
   const C = useThemeTokens();
   return (
     <div
-      className="rounded-xl p-4 flex items-center gap-4"
+      className="rounded-lg p-4 flex items-center gap-4"
       style={{
-        border: `2px solid ${equipped ? C.gold : C.border}`,
-        background: equipped ? C.goldSoft : "transparent",
+        border: `2px solid ${equipped ? C.accent : C.border}`,
+        background: equipped ? C.accentSoft : "transparent",
         opacity: locked ? 0.7 : 1,
       }}
     >
       <div
         className="w-12 h-12 rounded-lg flex-shrink-0"
-        style={{
-          background:
-            previewColors.length > 1
-              ? `linear-gradient(135deg, ${previewColors.join(", ")})`
-              : previewColors[0],
-          border: `1px solid ${C.border}`,
-        }}
+        style={{ background: previewColors[0], border: `1px solid ${C.border}` }}
       />
       <div className="flex-1">
         <div className="font-semibold text-sm" style={{ color: C.textPrimary }}>
@@ -38,13 +32,13 @@ export function UnlockCard({ name, previewColors, locked, conditionText, equippe
         <button
           onClick={onEquip}
           className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-transform active:scale-95"
-          style={{ background: C.gold, color: "#14161f" }}
+          style={{ background: C.accent, color: C.cardInk }}
         >
           Equip
         </button>
       )}
       {!locked && equipped && (
-        <span className="text-xs font-semibold" style={{ color: C.gold }}>
+        <span className="text-xs font-semibold" style={{ color: C.accent }}>
           Equipped
         </span>
       )}

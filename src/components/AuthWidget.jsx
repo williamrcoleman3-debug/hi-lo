@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
+import { FONT_TABULAR } from "../themes/registry.js";
 import { useAuth } from "../hooks/useAuth";
 import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
@@ -10,11 +11,11 @@ function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <div
-        className="w-full max-w-sm rounded-2xl p-6"
+        className="w-full max-w-sm rounded-lg p-6"
         style={{ background: C.panel, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold" style={{ fontFamily: "'Fraunces', serif", color: C.textPrimary }}>
+          <h2 className="text-lg font-bold" style={{ color: C.textPrimary }}>
             {title}
           </h2>
           {onClose && (
@@ -101,11 +102,11 @@ export function AuthWidget() {
 
   if (user && !loading && profile) {
     return (
-      <div className="flex items-center gap-3 text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+      <div className="flex items-center gap-3 text-sm">
         <span aria-hidden="true">{profile.avatar}</span>
         <span style={{ color: C.textSecondary }}>{profile.username}</span>
         {profile.current_streak > 0 && (
-          <span style={{ color: C.gold }} title={`${profile.current_streak}-day banking streak`}>
+          <span style={{ color: C.accent, ...FONT_TABULAR }} title={`${profile.current_streak}-day banking streak`}>
             🔥{profile.current_streak}
           </span>
         )}
@@ -143,7 +144,7 @@ export function AuthWidget() {
             type="submit"
             disabled={!canSubmit}
             className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
-            style={{ background: C.gold, color: "#14161f" }}
+            style={{ background: C.accent, color: C.cardInk }}
           >
             Save and continue
           </button>
@@ -199,7 +200,7 @@ export function AuthWidget() {
               type="submit"
               disabled={busy}
               className="rounded-lg px-3 py-2 text-sm font-semibold"
-              style={{ background: C.gold, color: "#14161f" }}
+              style={{ background: C.accent, color: C.cardInk }}
             >
               Send code
             </button>
@@ -223,7 +224,7 @@ export function AuthWidget() {
               type="submit"
               disabled={busy}
               className="rounded-lg px-3 py-2 text-sm font-semibold"
-              style={{ background: C.gold, color: "#14161f" }}
+              style={{ background: C.accent, color: C.cardInk }}
             >
               Verify
             </button>

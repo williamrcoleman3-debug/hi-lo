@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useThemeTokens, ThemeProvider } from "./themes/ThemeContext";
+import { FONT_STACK } from "./themes/registry.js";
 import { useAuth } from "./hooks/useAuth";
 import { useProgress } from "./hooks/useProgress";
 import { useSiteMessages } from "./hooks/useSiteMessages";
@@ -36,8 +37,7 @@ function TabLoadingFallback() {
   );
 }
 
-// Single source of truth for auth + progress, resolved once here so the
-// equipped theme is known before anything inside ThemeProvider renders.
+// Single source of truth for auth + progress, resolved once here.
 // Everything below reads it via props (GameScreen, UnlocksScreen) or via
 // useThemeTokens() (for the actual color/style values).
 export default function App() {
@@ -54,19 +54,16 @@ export default function App() {
     selectedDeckConfig,
     unlockedDecks,
     deckProgress,
-    equippedTheme,
-    unlockedThemeIds,
     gameMode,
     recordCorrectCall,
     refreshDeckProgress,
     selectDeck,
-    setEquippedTheme,
     setGameMode,
   } = useProgress(userId);
   const { messages } = useSiteMessages();
 
   return (
-    <ThemeProvider themeId={equippedTheme}>
+    <ThemeProvider>
       <AppShell
         userId={userId}
         profile={profile}
@@ -78,13 +75,10 @@ export default function App() {
         selectedDeckConfig={selectedDeckConfig}
         unlockedDecks={unlockedDecks}
         deckProgress={deckProgress}
-        equippedTheme={equippedTheme}
-        unlockedThemeIds={unlockedThemeIds}
         gameMode={gameMode}
         recordCorrectCall={recordCorrectCall}
         refreshDeckProgress={refreshDeckProgress}
         selectDeck={selectDeck}
-        setEquippedTheme={setEquippedTheme}
         setGameMode={setGameMode}
         messages={messages}
       />
@@ -103,13 +97,10 @@ function AppShell({
   selectedDeckConfig,
   unlockedDecks,
   deckProgress,
-  equippedTheme,
-  unlockedThemeIds,
   gameMode,
   recordCorrectCall,
   refreshDeckProgress,
   selectDeck,
-  setEquippedTheme,
   setGameMode,
   messages,
 }) {
@@ -130,7 +121,7 @@ function AppShell({
   return (
     <div
       className="min-h-screen w-full flex flex-col items-center px-4 py-8"
-      style={{ background: C.bg, color: C.textPrimary, fontFamily: "'IBM Plex Sans', sans-serif" }}
+      style={{ background: C.bg, color: C.textPrimary, fontFamily: FONT_STACK }}
     >
       <div className="w-full max-w-4xl flex items-center justify-between mb-6">
         <TabNav active={tab} onChange={goToTab} />
@@ -176,9 +167,6 @@ function AppShell({
               checkUsernameAvailable={checkUsernameAvailable}
               updateUsername={updateUsername}
               updateAvatar={updateAvatar}
-              unlockedThemeIds={unlockedThemeIds}
-              equippedTheme={equippedTheme}
-              setEquippedTheme={setEquippedTheme}
               gameMode={gameMode}
               setGameMode={setGameMode}
             />

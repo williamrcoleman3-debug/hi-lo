@@ -9,17 +9,9 @@
       content="Higher · Lower · Same is a free-to-play card game — guess whether the next card is higher, lower, or the same, build your streak, and bank your winnings. Currently running a real $25,000 cash contest."
     />
     <title>Higher · Lower · Same</title>
-    <!-- Moved out of index.css's @import so the browser can discover and
-         start fetching these in parallel with the rest of the page load,
-         instead of a serialized HTML -> main CSS -> @import -> font CSS ->
-         font files chain. preconnect warms the connection to both font
-         domains before the stylesheet link even resolves. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-    />
+    <!-- No web fonts -- the app uses a system sans-serif stack everywhere,
+         so there's nothing to fetch or preconnect for. -->
+
   </head>
   <body>
     <div id="root"></div>

@@ -20,8 +20,8 @@ export function AvatarPicker({ value, onChange }) {
             aria-pressed={selected}
             className="aspect-square rounded-lg text-xl flex items-center justify-center transition-transform active:scale-95"
             style={{
-              border: `2px solid ${selected ? C.gold : C.border}`,
-              background: selected ? C.goldSoft : "transparent",
+              border: `2px solid ${selected ? C.accent : C.border}`,
+              background: selected ? C.accentSoft : "transparent",
             }}
           >
             {emoji}

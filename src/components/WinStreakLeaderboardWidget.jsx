@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
+import { FONT_TABULAR } from "../themes/registry.js";
 import { fetchSingleDeckWinStreakLeaderboard, LEADERBOARD_BACKEND_READY } from "../leaderboard/api";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -33,11 +34,11 @@ export function WinStreakLeaderboardWidget({ onViewFull }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
+        <span className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
           Win Streak — Single Deck
         </span>
         {onViewFull && (
-          <button onClick={onViewFull} className="text-[10px] uppercase tracking-widest underline" style={{ color: C.gold }}>
+          <button onClick={onViewFull} className="text-xs uppercase tracking-widest underline" style={{ color: C.accent }}>
             Full board
           </button>
         )}
@@ -60,16 +61,16 @@ export function WinStreakLeaderboardWidget({ onViewFull }) {
           <div
             key={i}
             className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs"
-            style={{ border: `1px solid ${C.border}`, fontFamily: "'IBM Plex Mono', monospace" }}
+            style={{ border: `1px solid ${C.border}` }}
           >
             <span className="flex items-center gap-2">
-              <span style={{ color: C.textMuted, minWidth: "1.5em", display: "inline-block" }}>
+              <span style={{ color: C.textMuted, minWidth: "1.5em", display: "inline-block", ...FONT_TABULAR }}>
                 {MEDALS[i] ?? `#${i + 1}`}
               </span>
               {row.avatar && <span aria-hidden="true">{row.avatar}</span>}
               <span style={{ color: C.textPrimary }}>{row.username}</span>
             </span>
-            <span style={{ color: C.gold }}>{row.score.toLocaleString()}</span>
+            <span style={{ color: C.accent, ...FONT_TABULAR }}>{row.score.toLocaleString()}</span>
           </div>
         ))
       )}

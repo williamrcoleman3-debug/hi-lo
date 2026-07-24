@@ -35,27 +35,11 @@ export async function fetchCloudDeckProgress(userId) {
 // is gone) -- that data was always purely client-computed with nothing to
 // verify it, so crediting it to a real account's best_win_streak would just
 // reopen the exact hole this rebuild closes. A player who signs up after
-// playing anonymously starts deck_progress fresh; equipped_theme (a
-// cosmetic preference, not an achievement) still carries over below.
+// playing anonymously starts deck_progress fresh.
 
-// equipped_theme is a plain preference, not a race-sensitive metric like the
-// streak/score columns — a direct table read/write is fine, no RPC needed.
-export async function fetchEquippedTheme(userId) {
-  const { data, error } = await supabase.from("profiles").select("equipped_theme").eq("id", userId).maybeSingle();
-  if (error) throw error;
-  return data?.equipped_theme ?? null;
-}
-
-export async function pushEquippedTheme(userId, themeId) {
-  const { error } = await supabase.from("profiles").update({ equipped_theme: themeId }).eq("id", userId);
-  if (error) console.error("pushEquippedTheme failed:", error.message);
-}
-
-// game_mode ('bank' | 'speed') -- same plain-preference pattern as
-// equipped_theme above, just with no unlock-gating complexity to reconcile
-// (Bank/Speed has no unlock condition, so unlike equipped_theme there's no
-// "local choice predates the cloud" merge case to handle -- the cloud value
-// always wins once fetched).
+// game_mode ('bank' | 'speed') is a plain preference, not a race-sensitive
+// metric like the streak/score columns — a direct table read/write is fine,
+// no RPC needed. The cloud value always wins once fetched.
 export async function fetchGameMode(userId) {
   const { data, error } = await supabase.from("profiles").select("game_mode").eq("id", userId).maybeSingle();
   if (error) throw error;

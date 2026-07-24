@@ -9,10 +9,24 @@ import {
   TIMER_MS,
   AUTO_ADVANCE_MS,
   DEFAULT_PRICING_MODE,
+  RANKS,
 } from "../engine";
 import { MAX_LIFELINES_PER_GAME } from "../lifelines/lifelines.js";
+import { playClickTone, playWinTone, playLoseTone } from "../audio/sound.js";
 
-const REVEAL_DELAY_MS = 500; // pause between draw and resolution, so the card can flip into view
+const FLASH_MS = 180;
+const SHAKE_MS = 180;
+const WIN_POP_MS = 180;
+
+// Mirrors supabase/schema.sql's full_clear_target() -- suits x 13 ranks x
+// copies, minus 1 (the very first card is already in play as the starting
+// compare card, never drawn as a "call"). Anonymous play has no server to
+// enforce this, but the math has to match or a Speed Mode full clear here
+// would never trigger at the same point the server-authoritative version
+// does.
+function fullClearTarget(deckConfig) {
+  return deckConfig.suits.length * RANKS.length * deckConfig.deckCopies - 1;
+}
 
 // `deckConfig` is a deck config from engine/decks.js ({ id, suits, deckCopies, ante, ... }).
 // `onCorrectCall(deckId, call, { winStreak, trueProbs })` fires after every
@@ -26,7 +40,18 @@ const REVEAL_DELAY_MS = 500; // pause between draw and resolution, so the card c
 // `onUseLifeline` (async () => Promise<{ success }>, spends one from the
 // account) together gate the in-game "Save the Game" offer — the per-game
 // cap of 2 is tracked here, separately from the persistent account balance.
-export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance = 0, onUseLifeline } = {}) {
+//
+// `speedMode` -- see useServerGame.js's header comment for the full
+// rationale (this hook mirrors that one closely, just without a server).
+// Captured into speedModeRef at the start of each game, not read live, so
+// changing the preference mid-game never affects the game in progress.
+// Speed Mode here means: no win-pause (advance instantly), no voluntary
+// banking (cashOut is only ever called from the UI when the Bank button is
+// shown, which GameScreenView hides for Speed Mode -- but a Speed Mode
+// full clear still needs some way to actually collect the payout, so that
+// case auto-finalizes here exactly like the lifelines_used > 0 case
+// already did, mirroring make_call's server-side equivalent).
+export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance = 0, onUseLifeline, speedMode = false } = {}) {
   const buildGame = useCallback(() => {
     const d = freshDeck(deckConfig);
     return { deck: d.slice(1), compareCard: d[0] };
@@ -44,16 +69,18 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
   const [revealing, setRevealing] = useState(false);
   const [flash, setFlash] = useState(null);
   const [shake, setShake] = useState(false);
-  const [justClimbed, setJustClimbed] = useState(false);
+  const [justWon, setJustWon] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [timeLeft, setTimeLeft] = useState(TIMER_MS);
   const [lifelinesUsedThisGame, setLifelinesUsedThisGame] = useState(0);
   const [pendingBustCard, setPendingBustCard] = useState(null);
+  const [sessionSpeedMode, setSessionSpeedMode] = useState(false);
 
   const toastId = useRef(0);
   const intervalRef = useRef(null);
   const autoAdvanceRef = useRef(null);
   const isFirstDeckRender = useRef(true);
+  const speedModeRef = useRef(speedMode);
 
   const decisionPaused = status !== "playing" || revealing || awaitingAdvance;
   const probs = getActiveProbs(DEFAULT_PRICING_MODE, { deck, compareCard, deckConfig });
@@ -74,7 +101,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
 
   const fireFlash = useCallback((type) => {
     setFlash(type);
-    setTimeout(() => setFlash(null), 420);
+    setTimeout(() => setFlash(null), FLASH_MS);
   }, []);
 
   const resolveBust = useCallback(
@@ -83,7 +110,8 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
       setMessage(reasonMsg);
       fireFlash("lose");
       setShake(true);
-      setTimeout(() => setShake(false), 420);
+      setTimeout(() => setShake(false), SHAKE_MS);
+      playLoseTone();
       if (banked > 0) onGameEnd?.(deckConfig.id, { amount: banked, wasBanked: false });
     },
     [fireFlash, banked, deckConfig, onGameEnd]
@@ -111,6 +139,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
   }, [compareCard, status, revealing, awaitingAdvance]);
 
   const startNewGame = useCallback(() => {
+    speedModeRef.current = speedMode;
     const { deck: d, compareCard: c } = buildGame();
     setDeck(d);
     setCompareCard(c);
@@ -123,11 +152,14 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
     setShake(false);
     setLifelinesUsedThisGame(0);
     setPendingBustCard(null);
-  }, [buildGame]);
+    setSessionSpeedMode(speedMode);
+  }, [buildGame, speedMode]);
 
   // Switching decks abandons the current game (like letting the timer run
   // out) and deals a fresh shoe for the new deck. Skipped on mount, since
   // the initial state above already set up the starting deck's game.
+  // Deliberately keyed only on deckConfig.id, not speedMode -- see
+  // useServerGame.js's matching comment for why.
   useEffect(() => {
     if (isFirstDeckRender.current) {
       isFirstDeckRender.current = false;
@@ -156,22 +188,45 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
       const { p, growth, drawn, rest, trueProbs } = prepared;
 
       clearInterval(intervalRef.current);
+      playClickTone();
       setRevealing(true);
       setRevealedCard(drawn);
       setDeck(rest);
 
-      setTimeout(() => {
-        const correct = isCorrectCall(call, compareCard, drawn);
+      // Applied the instant the call is resolved -- no artificial
+      // pre-delay (there used to be one; removed for speed).
+      const correct = isCorrectCall(call, compareCard, drawn);
 
-        if (correct) {
-          const newWinStreak = winStreak + 1;
-          const { newBanked, gain } = applyWin(banked, growth, deckConfig.ante);
-          setWinStreak(newWinStreak);
-          setBanked(newBanked);
-          setJustClimbed(true);
-          setTimeout(() => setJustClimbed(false), 400);
-          spawnToast(`+${gain.toLocaleString()}`);
-          fireFlash("win");
+      if (correct) {
+        const newWinStreak = winStreak + 1;
+        const { newBanked, gain } = applyWin(banked, growth, deckConfig.ante);
+        setWinStreak(newWinStreak);
+        setBanked(newBanked);
+        setJustWon(true);
+        setTimeout(() => setJustWon(false), WIN_POP_MS);
+        spawnToast(`+${gain.toLocaleString()}`);
+        fireFlash("win");
+        playWinTone();
+        onCorrectCall?.(deckConfig.id, call, { winStreak: newWinStreak, trueProbs });
+
+        const bankingDisabled = lifelinesUsedThisGame > 0 || speedModeRef.current;
+        if (bankingDisabled && newWinStreak >= fullClearTarget(deckConfig)) {
+          // No voluntary banking available (lifeline used, or Speed Mode)
+          // and the deck is fully cleared -- the only way this payout can
+          // ever be collected is to finalize right here, mirroring
+          // make_call's server-side auto-finalize for the same two cases.
+          setTotalTokens((t) => t + newBanked);
+          setStatus("cashed");
+          setMessage(`Cleared the deck! Banked ${newBanked.toLocaleString()} points.`);
+          onGameEnd?.(deckConfig.id, { amount: newBanked, wasBanked: true });
+        } else if (speedModeRef.current) {
+          // Speed Mode: advance to the next hand immediately -- same
+          // effect as advanceHand() below, just automatic instead of
+          // gated behind a tap or timer.
+          setCompareCard(drawn);
+          setRevealedCard(null);
+          setMessage("Call it before the clock runs out.");
+        } else {
           setAwaitingAdvance(true);
           setMessage(
             call === "same"
@@ -180,18 +235,17 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
               ? `${call === "red" ? "Red" : "Black"}! Priced at ${Math.round(p * 100)}% — +${gain.toLocaleString()} tokens. Tap to keep going.`
               : `Correct — win streak ${newWinStreak}. +${gain.toLocaleString()} tokens. Tap to keep going.`
           );
-          onCorrectCall?.(deckConfig.id, call, { winStreak: newWinStreak, trueProbs });
-        } else if (lifelineAvailable) {
-          setPendingBustCard(drawn);
-          setStatus("lifeline-offer");
-          setMessage(
-            `Wrong — drew ${drawn.rank.key}${drawn.suit.symbol}. Use a Save the Game lifeline to keep your ${winStreak}-hand streak alive?`
-          );
-        } else {
-          resolveBust(`Busted on ${drawn.rank.key}${drawn.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`);
         }
-        setRevealing(false);
-      }, REVEAL_DELAY_MS);
+      } else if (lifelineAvailable) {
+        setPendingBustCard(drawn);
+        setStatus("lifeline-offer");
+        setMessage(
+          `Wrong — drew ${drawn.rank.key}${drawn.suit.symbol}. Use a Save the Game lifeline to keep your ${winStreak}-hand streak alive?`
+        );
+      } else {
+        resolveBust(`Busted on ${drawn.rank.key}${drawn.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`);
+      }
+      setRevealing(false);
     },
     [
       deck,
@@ -203,10 +257,12 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
       awaitingAdvance,
       deckConfig,
       lifelineAvailable,
+      lifelinesUsedThisGame,
       spawnToast,
       fireFlash,
       resolveBust,
       onCorrectCall,
+      onGameEnd,
     ]
   );
 
@@ -270,12 +326,13 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
     revealing,
     flash,
     shake,
-    justClimbed,
+    justWon,
     toasts,
     timeLeft,
     probs,
     growths,
     lifelinesUsedThisGame,
+    sessionSpeedMode,
     makeCall,
     advanceHand,
     cashOut,

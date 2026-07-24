@@ -16,6 +16,7 @@ export function defaultProgress() {
     unlockedDecks: computeUnlockedDecks(deckProgress),
     deckProgress,
     equippedTheme: THEME_IDS.CLASSIC,
+    gameMode: "bank",
   };
 }
 
@@ -84,4 +85,11 @@ export function selectDeck(progress, deckId) {
 export function selectTheme(progress, themeId, unlockedThemeIds) {
   if (!unlockedThemeIds.includes(themeId)) return progress;
   return { ...progress, equippedTheme: themeId };
+}
+
+// No unlock gating -- Bank/Speed is a plain preference available to
+// everyone from the start, unlike themes/decks.
+export function selectGameMode(progress, mode) {
+  if (mode !== "bank" && mode !== "speed") return progress;
+  return { ...progress, gameMode: mode };
 }

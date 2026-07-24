@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadProgress, saveProgress, applyCorrectCall, selectDeck, selectTheme } from "../persistence/progress.js";
-import { fetchCloudDeckProgress, fetchEquippedTheme, pushEquippedTheme } from "../persistence/cloudProgress.js";
+import { loadProgress, saveProgress, applyCorrectCall, selectDeck, selectTheme, selectGameMode } from "../persistence/progress.js";
+import {
+  fetchCloudDeckProgress,
+  fetchEquippedTheme,
+  pushEquippedTheme,
+  fetchGameMode,
+  pushGameMode,
+} from "../persistence/cloudProgress.js";
 import { getDeck, computeUnlockedDecks } from "../engine/decks.js";
 import { THEME_IDS, computeUnlockedThemes } from "../themes/registry.js";
 
@@ -32,6 +38,7 @@ export function useProgress(userId) {
       try {
         const cloudDeckProgress = await fetchCloudDeckProgress(userId);
         const cloudEquippedTheme = await fetchEquippedTheme(userId);
+        const cloudGameMode = await fetchGameMode(userId);
         if (cancelled) return;
 
         // The cloud's last-known equipped theme wins (it may reflect another
@@ -44,11 +51,16 @@ export function useProgress(userId) {
           await pushEquippedTheme(userId, equippedTheme);
         }
 
+        // No unlock-gating to reconcile for gameMode (unlike equippedTheme
+        // above) -- the cloud value always wins once fetched.
+        const gameMode = cloudGameMode ?? "bank";
+
         setProgress((p) => ({
           ...p,
           deckProgress: cloudDeckProgress,
           unlockedDecks: computeUnlockedDecks(cloudDeckProgress),
           equippedTheme,
+          gameMode,
         }));
       } catch (err) {
         console.error("Cloud progress sync failed, staying on local progress:", err.message);
@@ -98,6 +110,14 @@ export function useProgress(userId) {
     [userId, progress.unlockedDecks]
   );
 
+  const setGameMode = useCallback(
+    (mode) => {
+      setProgress((p) => selectGameMode(p, mode));
+      if (userId) pushGameMode(userId, mode);
+    },
+    [userId]
+  );
+
   return {
     selectedDeck: progress.selectedDeck,
     selectedDeckConfig: getDeck(progress.selectedDeck),
@@ -105,9 +125,11 @@ export function useProgress(userId) {
     deckProgress: progress.deckProgress,
     equippedTheme: progress.equippedTheme,
     unlockedThemeIds: computeUnlockedThemes({ unlockedDecks: progress.unlockedDecks }),
+    gameMode: progress.gameMode,
     recordCorrectCall,
     refreshDeckProgress,
     selectDeck: selectDeckById,
     setEquippedTheme,
+    setGameMode,
   };
 }

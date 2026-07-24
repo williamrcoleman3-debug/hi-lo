@@ -50,3 +50,19 @@ export async function pushEquippedTheme(userId, themeId) {
   const { error } = await supabase.from("profiles").update({ equipped_theme: themeId }).eq("id", userId);
   if (error) console.error("pushEquippedTheme failed:", error.message);
 }
+
+// game_mode ('bank' | 'speed') -- same plain-preference pattern as
+// equipped_theme above, just with no unlock-gating complexity to reconcile
+// (Bank/Speed has no unlock condition, so unlike equipped_theme there's no
+// "local choice predates the cloud" merge case to handle -- the cloud value
+// always wins once fetched).
+export async function fetchGameMode(userId) {
+  const { data, error } = await supabase.from("profiles").select("game_mode").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.game_mode ?? null;
+}
+
+export async function pushGameMode(userId, mode) {
+  const { error } = await supabase.from("profiles").update({ game_mode: mode }).eq("id", userId);
+  if (error) console.error("pushGameMode failed:", error.message);
+}

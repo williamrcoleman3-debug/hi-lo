@@ -30,12 +30,13 @@ export function GameScreenView({
   revealing,
   flash,
   shake,
-  justClimbed,
+  justWon,
   toasts,
   timeLeft,
   probs,
   growths,
   lifelinesUsedThisGame,
+  sessionSpeedMode,
   makeCall,
   advanceHand,
   cashOut,
@@ -65,6 +66,17 @@ export function GameScreenView({
 
   const callDisabled = (p) => revealing || p <= 0;
 
+  // Glow only, never a size change (would shift layout) -- intensity ramps
+  // with the current streak and caps at streak 10, so it never keeps
+  // escalating forever. Two stacked shadows read as a stronger glow at
+  // higher intensity without needing to parse C.gold's color format to
+  // vary its opacity channel.
+  const streakGlowIntensity = Math.min(winStreak, 10) / 10;
+  const streakGlowStyle =
+    winStreak > 0
+      ? { textShadow: `0 0 ${4 + streakGlowIntensity * 6}px ${C.gold}, 0 0 ${8 + streakGlowIntensity * 14}px ${C.gold}` }
+      : {};
+
   return (
     <div className={`w-full flex flex-col items-center relative overflow-hidden ${shake ? "screen-shake" : ""}`}>
       {flash && (
@@ -72,7 +84,7 @@ export function GameScreenView({
           className="pointer-events-none fixed inset-0 z-50"
           style={{
             background: flash === "win" ? C.winFlashOverlay : C.loseFlashOverlay,
-            transition: "opacity 0.42s ease-out",
+            transition: "opacity 0.18s ease-out",
           }}
         />
       )}
@@ -153,7 +165,7 @@ export function GameScreenView({
                 <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
                   current
                 </span>
-                <Card card={compareCard} />
+                <Card card={compareCard} pop={sessionSpeedMode && justWon} />
               </div>
               <div className="flex flex-col items-center gap-2">
                 <span className="text-[10px] uppercase tracking-widest" style={{ color: C.textMuted }}>
@@ -296,8 +308,11 @@ export function GameScreenView({
                 generate far more tokens than the lifeline cost. From that
                 point on the only ways this game ends are busting (0
                 tokens) or actually clearing the full deck, which pays out
-                automatically -- see useServerGame's "cashed" handling. */}
-            {status === "playing" && banked > 0 && !lifelinesUsedThisGame && (
+                automatically -- see useServerGame's "cashed" handling.
+                Also hidden unconditionally in Speed Mode -- that mode has
+                no voluntary banking by design, same "bust or clear the
+                deck" restriction, just for a different reason. */}
+            {status === "playing" && banked > 0 && !lifelinesUsedThisGame && !sessionSpeedMode && (
               <button
                 onClick={cashOut}
                 className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 mb-2"
@@ -307,9 +322,11 @@ export function GameScreenView({
               </button>
             )}
 
-            {status === "playing" && !!lifelinesUsedThisGame && (
+            {status === "playing" && (!!lifelinesUsedThisGame || sessionSpeedMode) && (
               <div className="w-full text-center rounded-xl px-4 py-2 mb-2 text-xs" style={{ border: `1px dashed ${C.border}`, color: C.textMuted }}>
-                Banking is off after using a lifeline this game — bust or clear the whole deck to end it.
+                {sessionSpeedMode
+                  ? "Speed Mode has no banking — bust or clear the whole deck to end it."
+                  : "Banking is off after using a lifeline this game — bust or clear the whole deck to end it."}
               </div>
             )}
 
@@ -355,9 +372,7 @@ export function GameScreenView({
               </div>
               <div className="flex justify-between">
                 <span>win streak</span>
-                <span className={justClimbed ? "streak-punch" : ""} style={{ color: C.textPrimary }}>
-                  {winStreak}
-                </span>
+                <span style={{ color: C.textPrimary, ...streakGlowStyle }}>{winStreak}</span>
               </div>
               <div className="flex justify-between">
                 <span>at risk</span>

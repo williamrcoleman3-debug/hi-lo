@@ -6,8 +6,8 @@ import { supabase } from "../supabase/client.js";
 // these functions never send or receive the deck itself, only the current
 // compare card and the outcome of each call.
 
-export async function startGame(deckId) {
-  const { data, error } = await supabase.rpc("start_game", { p_deck_id: deckId });
+export async function startGame(deckId, speedMode = false) {
+  const { data, error } = await supabase.rpc("start_game", { p_deck_id: deckId, p_speed_mode: speedMode });
   if (error) throw error;
   const row = data?.[0];
   return {

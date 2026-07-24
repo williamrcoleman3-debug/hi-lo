@@ -6,6 +6,7 @@ import { UnlockCard } from "./UnlockCard";
 import { ThemePreviewOverlay } from "./ThemePreviewOverlay";
 import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
+import { isMuted, setMuted } from "../audio/sound.js";
 
 function ComingSoon({ label, C }) {
   return (
@@ -132,7 +133,101 @@ function ProfileSection({ profile, checkUsernameAvailable, updateUsername, updat
   );
 }
 
-export function UnlocksScreen({ profile, checkUsernameAvailable, updateUsername, updateAvatar, unlockedThemeIds, equippedTheme, setEquippedTheme }) {
+// Bank/Speed preference -- available to everyone, no unlock condition
+// (unlike Themes below). Takes effect on the *next* game only; changing it
+// mid-game never affects the game already in progress (see
+// useServerGame.js/useGame.js's speedModeRef for why).
+function GameModeSection({ gameMode, setGameMode }) {
+  const C = useThemeTokens();
+  const optionStyle = (active) =>
+    active
+      ? { border: `2px solid ${C.gold}`, background: C.goldSoft, color: C.gold }
+      : { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" };
+
+  return (
+    <section className="w-full max-w-4xl mb-8">
+      <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>
+        Game Mode
+      </h2>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <button
+          onClick={() => setGameMode("bank")}
+          className="rounded-xl px-3 py-3 text-left transition-transform active:scale-95"
+          style={optionStyle(gameMode !== "speed")}
+        >
+          <div className="text-sm font-semibold">Bank Mode</div>
+          <div className="text-xs mt-0.5" style={{ opacity: 0.85 }}>
+            Bank anytime. A short pause after each win.
+          </div>
+        </button>
+        <button
+          onClick={() => setGameMode("speed")}
+          className="rounded-xl px-3 py-3 text-left transition-transform active:scale-95"
+          style={optionStyle(gameMode === "speed")}
+        >
+          <div className="text-sm font-semibold">Speed Mode</div>
+          <div className="text-xs mt-0.5" style={{ opacity: 0.85 }}>
+            No pause, no banking — bust or clear the whole deck.
+          </div>
+        </button>
+      </div>
+      <p className="text-xs" style={{ color: C.textMuted }}>
+        Takes effect on your next game — never changes a game already in progress.
+      </p>
+    </section>
+  );
+}
+
+// Local device preference, not synced to an account -- see audio/sound.js.
+function SoundSection() {
+  const C = useThemeTokens();
+  const [muted, setMutedState] = useState(() => isMuted());
+
+  const toggle = () => {
+    const next = !muted;
+    setMuted(next);
+    setMutedState(next);
+  };
+
+  return (
+    <section className="w-full max-w-4xl mb-8">
+      <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>
+        Sound
+      </h2>
+      <div
+        className="rounded-xl p-4 flex items-center justify-between"
+        style={{ border: `1px solid ${C.border}` }}
+      >
+        <span className="text-sm" style={{ color: C.textPrimary }}>
+          Sound effects
+        </span>
+        <button
+          onClick={toggle}
+          className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-transform active:scale-95"
+          style={
+            muted
+              ? { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" }
+              : { background: C.gold, color: "#14161f" }
+          }
+        >
+          {muted ? "Off" : "On"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export function UnlocksScreen({
+  profile,
+  checkUsernameAvailable,
+  updateUsername,
+  updateAvatar,
+  unlockedThemeIds,
+  equippedTheme,
+  setEquippedTheme,
+  gameMode,
+  setGameMode,
+}) {
   const C = useThemeTokens();
   const [previewThemeId, setPreviewThemeId] = useState(null);
 
@@ -153,6 +248,10 @@ export function UnlocksScreen({ profile, checkUsernameAvailable, updateUsername,
         updateUsername={updateUsername}
         updateAvatar={updateAvatar}
       />
+
+      <GameModeSection gameMode={gameMode} setGameMode={setGameMode} />
+
+      <SoundSection />
 
       <section className="w-full max-w-4xl mb-8">
         <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>

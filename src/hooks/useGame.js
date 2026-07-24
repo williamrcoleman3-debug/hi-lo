@@ -75,6 +75,10 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
   const [lifelinesUsedThisGame, setLifelinesUsedThisGame] = useState(0);
   const [pendingBustCard, setPendingBustCard] = useState(null);
   const [sessionSpeedMode, setSessionSpeedMode] = useState(false);
+  // Last 5 resolved hands, most recent first -- reflects whether the call
+  // itself was right or wrong, independent of a lifeline later forgiving a
+  // wrong one (the guess was still factually wrong). Reset each new game.
+  const [history, setHistory] = useState([]);
 
   const toastId = useRef(0);
   const intervalRef = useRef(null);
@@ -153,6 +157,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
     setLifelinesUsedThisGame(0);
     setPendingBustCard(null);
     setSessionSpeedMode(speedMode);
+    setHistory([]);
   }, [buildGame, speedMode]);
 
   // Switching decks abandons the current game (like letting the timer run
@@ -196,6 +201,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
       // Applied the instant the call is resolved -- no artificial
       // pre-delay (there used to be one; removed for speed).
       const correct = isCorrectCall(call, compareCard, drawn);
+      setHistory((h) => [{ card: drawn, correct }, ...h].slice(0, 5));
 
       if (correct) {
         const newWinStreak = winStreak + 1;
@@ -333,6 +339,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
     growths,
     lifelinesUsedThisGame,
     sessionSpeedMode,
+    history,
     makeCall,
     advanceHand,
     cashOut,

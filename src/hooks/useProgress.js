@@ -34,7 +34,7 @@ export function useProgress(userId) {
         const cloudGameMode = await fetchGameMode(userId);
         if (cancelled) return;
 
-        const gameMode = cloudGameMode ?? "bank";
+        const gameMode = cloudGameMode ?? "speed";
 
         setProgress((p) => ({
           ...p,

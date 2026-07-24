@@ -53,6 +53,10 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
   const [lifelinesUsedThisGame, setLifelinesUsedThisGame] = useState(0);
   const [pendingBustCard, setPendingBustCard] = useState(null);
   const [sessionSpeedMode, setSessionSpeedMode] = useState(false);
+  // Last 5 resolved hands, most recent first -- see useGame.js's matching
+  // comment for why this reflects the call's correctness independent of a
+  // later lifeline forgiving it.
+  const [history, setHistory] = useState([]);
 
   const toastId = useRef(0);
   const intervalRef = useRef(null);
@@ -106,6 +110,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
       setLifelinesUsedThisGame(0);
       setPendingBustCard(null);
       setSessionSpeedMode(speedMode);
+      setHistory([]);
     } catch (err) {
       console.error("startGame failed:", err.message);
       setMessage(
@@ -213,6 +218,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
           // ever blocked the next guess was the network round trip itself.
           setRevealedCard(result.drawnCard);
           setCardsLeft(result.cardsLeft);
+          setHistory((h) => [{ card: result.drawnCard, correct: result.correct }, ...h].slice(0, 5));
 
           if (result.correct) {
             setWinStreak(result.winStreak);
@@ -347,6 +353,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
     growths,
     lifelinesUsedThisGame,
     sessionSpeedMode,
+    history,
     makeCall,
     advanceHand,
     cashOut,

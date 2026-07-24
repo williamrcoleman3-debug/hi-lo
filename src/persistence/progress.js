@@ -14,7 +14,7 @@ export function defaultProgress() {
     selectedDeck: DEFAULT_DECK_ID,
     unlockedDecks: computeUnlockedDecks(deckProgress),
     deckProgress,
-    gameMode: "bank",
+    gameMode: "speed",
   };
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
+import { FONT_TABULAR } from "../themes/registry.js";
 import { ACTIVE_DECKS } from "../engine";
 import {
   fetchLeaderboard,
@@ -32,15 +33,10 @@ function LeaderboardTable({ columns, rows, loading, loadError, emptyMessage }) {
   const C = useThemeTokens();
   const gridTemplateColumns = ["40px", ...columns.map((c) => c.width ?? "auto")].join(" ");
   return (
-    <div className="w-full max-w-4xl rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+    <div className="w-full max-w-4xl rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
       <div
-        className="grid gap-4 px-4 py-2 text-[10px] uppercase tracking-widest"
-        style={{
-          gridTemplateColumns,
-          background: C.panel,
-          color: C.textMuted,
-          fontFamily: "'IBM Plex Mono', monospace",
-        }}
+        className="grid gap-4 px-4 py-2 text-xs uppercase tracking-widest"
+        style={{ gridTemplateColumns, background: C.panel, color: C.textMuted }}
       >
         <span>#</span>
         {columns.map((c) => (
@@ -71,11 +67,11 @@ function LeaderboardTable({ columns, rows, loading, loadError, emptyMessage }) {
             className="grid gap-4 px-4 py-2 text-sm"
             style={{ gridTemplateColumns, borderTop: `1px solid ${C.border}` }}
           >
-            <span style={{ color: i < 3 ? C.gold : C.textMuted, fontFamily: "'IBM Plex Mono', monospace" }}>
+            <span style={{ color: i < 3 ? C.accent : C.textMuted, ...FONT_TABULAR }}>
               {rankDisplay(i)}
             </span>
             {columns.map((c) => (
-              <span key={c.header} style={c.color ? { color: c.color(row) } : undefined}>
+              <span key={c.header} style={c.color ? { color: c.color(row), ...FONT_TABULAR } : FONT_TABULAR}>
                 {c.render(row)}
               </span>
             ))}
@@ -172,7 +168,7 @@ function TokenScoreSection() {
         emptyMessage={`No scores yet on ${deck.name} — be the first.`}
         columns={[
           { header: "Player", render: (r) => `${r.avatar ?? ""} ${r.username}`.trim(), width: "1fr" },
-          { header: "Score", render: (r) => r.score.toLocaleString(), color: () => C.gold },
+          { header: "Score", render: (r) => r.score.toLocaleString(), color: () => C.accent },
           { header: "Achieved", render: (r) => new Date(r.achievedAt).toLocaleDateString(), color: () => C.textMuted },
         ]}
       />
@@ -214,8 +210,8 @@ function DailyStreakSection() {
   return (
     <>
       <div
-        className="w-full max-w-4xl rounded-xl px-4 py-3 mb-4 text-xs"
-        style={{ border: `1px solid ${C.ember}`, background: "rgba(232,118,60,0.08)", color: C.textSecondary }}
+        className="w-full max-w-4xl rounded-lg px-4 py-3 mb-4 text-xs"
+        style={{ border: `1px solid ${C.accent}`, background: C.accentSoft, color: C.textSecondary }}
       >
         🔥 Account-wide — not tied to any one deck. Banking on any deck, any day, keeps this alive.
       </div>
@@ -225,10 +221,10 @@ function DailyStreakSection() {
           <button
             key={b.id}
             onClick={() => setBoard(b.id)}
-            className="rounded-xl px-3 py-2 text-left transition-transform active:scale-95"
+            className="rounded-lg px-3 py-2 text-left transition-transform active:scale-95"
             style={
               b.id === board
-                ? { border: `2px solid ${C.ember}`, background: "rgba(232,118,60,0.12)", color: C.ember }
+                ? { border: `2px solid ${C.accent}`, background: C.accentSoft, color: C.accent }
                 : { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" }
             }
           >
@@ -248,7 +244,7 @@ function DailyStreakSection() {
         emptyMessage="No daily streaks yet — be the first to bank two days in a row."
         columns={[
           { header: "Player", render: (r) => r.username, width: "1fr" },
-          { header: "Daily Streak", render: (r) => `${r.score.toLocaleString()} day${r.score === 1 ? "" : "s"}`, color: () => C.ember },
+          { header: "Daily Streak", render: (r) => `${r.score.toLocaleString()} day${r.score === 1 ? "" : "s"}`, color: () => C.accent },
         ]}
       />
     </>
@@ -262,9 +258,7 @@ export function LeaderboardScreen() {
   return (
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ fontFamily: "'Fraunces', serif" }}>
-          Leaderboard
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Leaderboard</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
           Top 25 in each board — permanent, all-time, no periodic resets.
         </p>
@@ -278,7 +272,7 @@ export function LeaderboardScreen() {
             className="px-4 py-2 rounded-lg text-sm font-semibold transition-transform active:scale-95"
             style={
               section === s.id
-                ? { border: `2px solid ${C.gold}`, color: C.gold, background: C.goldSoft }
+                ? { border: `2px solid ${C.accent}`, color: C.accent, background: C.accentSoft }
                 : { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" }
             }
           >
@@ -295,7 +289,7 @@ export function LeaderboardScreen() {
           emptyMessage="No streaks recorded yet on Single Deck — be the first."
           columns={[
             { header: "Player", render: (r) => `${r.avatar ?? ""} ${r.username}`.trim(), width: "1fr" },
-            { header: "Win Streak", render: (r) => r.score.toLocaleString(), color: () => C.gold },
+            { header: "Win Streak", render: (r) => r.score.toLocaleString(), color: () => C.accent },
             { header: "Achieved", render: (r) => new Date(r.achievedAt).toLocaleDateString(), color: () => C.textMuted },
           ]}
         />

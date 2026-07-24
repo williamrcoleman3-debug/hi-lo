@@ -5,13 +5,11 @@ export function FairnessScreen() {
   return (
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ fontFamily: "'Fraunces', serif" }}>
-          Fairness &amp; Randomness
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Fairness &amp; Randomness</h1>
       </div>
 
       <div
-        className="w-full max-w-4xl rounded-xl p-4 text-sm mb-4"
+        className="w-full max-w-4xl rounded-lg p-4 text-sm mb-4"
         style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
       >
         <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
@@ -27,7 +25,7 @@ export function FairnessScreen() {
       </div>
 
       <div
-        className="w-full max-w-4xl rounded-xl p-4 text-sm mb-4"
+        className="w-full max-w-4xl rounded-lg p-4 text-sm mb-4"
         style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
       >
         <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
@@ -60,7 +58,7 @@ export function FairnessScreen() {
       </div>
 
       <div
-        className="w-full max-w-4xl rounded-xl p-4 text-sm mb-4"
+        className="w-full max-w-4xl rounded-lg p-4 text-sm mb-4"
         style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
       >
         <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>
@@ -78,7 +76,7 @@ export function FairnessScreen() {
       </div>
 
       <div
-        className="w-full max-w-4xl rounded-xl p-4 text-sm"
+        className="w-full max-w-4xl rounded-lg p-4 text-sm"
         style={{ border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary }}
       >
         <h2 className="text-sm font-semibold mb-2" style={{ color: C.textPrimary }}>

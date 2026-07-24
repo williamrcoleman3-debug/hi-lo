@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadProgress, saveProgress, applyCorrectCall, selectDeck, selectTheme, selectGameMode } from "../persistence/progress.js";
-import {
-  fetchCloudDeckProgress,
-  fetchEquippedTheme,
-  pushEquippedTheme,
-  fetchGameMode,
-  pushGameMode,
-} from "../persistence/cloudProgress.js";
+import { loadProgress, saveProgress, applyCorrectCall, selectDeck, selectGameMode } from "../persistence/progress.js";
+import { fetchCloudDeckProgress, fetchGameMode, pushGameMode } from "../persistence/cloudProgress.js";
 import { getDeck, computeUnlockedDecks } from "../engine/decks.js";
-import { THEME_IDS, computeUnlockedThemes } from "../themes/registry.js";
 
 // `userId` is null for anonymous play (localStorage only) or a signed-in
 // user's id. Anonymous play tracks deckProgress/unlockedDecks purely
@@ -29,7 +22,8 @@ export function useProgress(userId) {
   }, [progress]);
 
   // On sign-in (once per user id): pull the authoritative cloud deck
-  // progress and equipped theme down.
+  // progress and game mode preference down. The cloud value always wins once
+  // fetched -- no unlock-gating to reconcile, Bank/Speed has none.
   useEffect(() => {
     if (!userId || syncedForUser.current === userId) return;
     syncedForUser.current = userId;
@@ -37,29 +31,15 @@ export function useProgress(userId) {
     (async () => {
       try {
         const cloudDeckProgress = await fetchCloudDeckProgress(userId);
-        const cloudEquippedTheme = await fetchEquippedTheme(userId);
         const cloudGameMode = await fetchGameMode(userId);
         if (cancelled) return;
 
-        // The cloud's last-known equipped theme wins (it may reflect another
-        // device) — unless this is a fresh profile still on the default and
-        // the player had equipped something else anonymously, in which case
-        // that anonymous choice is what gets pushed up.
-        let equippedTheme = cloudEquippedTheme ?? THEME_IDS.CLASSIC;
-        if (progress.equippedTheme !== THEME_IDS.CLASSIC && cloudEquippedTheme === THEME_IDS.CLASSIC) {
-          equippedTheme = progress.equippedTheme;
-          await pushEquippedTheme(userId, equippedTheme);
-        }
-
-        // No unlock-gating to reconcile for gameMode (unlike equippedTheme
-        // above) -- the cloud value always wins once fetched.
         const gameMode = cloudGameMode ?? "bank";
 
         setProgress((p) => ({
           ...p,
           deckProgress: cloudDeckProgress,
           unlockedDecks: computeUnlockedDecks(cloudDeckProgress),
-          equippedTheme,
           gameMode,
         }));
       } catch (err) {
@@ -100,16 +80,6 @@ export function useProgress(userId) {
     setProgress((p) => selectDeck(p, deckId));
   }, []);
 
-  const setEquippedTheme = useCallback(
-    (themeId) => {
-      setProgress((p) => selectTheme(p, themeId, computeUnlockedThemes({ unlockedDecks: p.unlockedDecks })));
-      if (userId && computeUnlockedThemes({ unlockedDecks: progress.unlockedDecks }).includes(themeId)) {
-        pushEquippedTheme(userId, themeId);
-      }
-    },
-    [userId, progress.unlockedDecks]
-  );
-
   const setGameMode = useCallback(
     (mode) => {
       setProgress((p) => selectGameMode(p, mode));
@@ -123,13 +93,10 @@ export function useProgress(userId) {
     selectedDeckConfig: getDeck(progress.selectedDeck),
     unlockedDecks: progress.unlockedDecks,
     deckProgress: progress.deckProgress,
-    equippedTheme: progress.equippedTheme,
-    unlockedThemeIds: computeUnlockedThemes({ unlockedDecks: progress.unlockedDecks }),
     gameMode: progress.gameMode,
     recordCorrectCall,
     refreshDeckProgress,
     selectDeck: selectDeckById,
-    setEquippedTheme,
     setGameMode,
   };
 }

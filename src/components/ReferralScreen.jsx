@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
+import { FONT_TABULAR } from "../themes/registry.js";
 import { buildShareUrl, shareResult } from "../share/share.js";
 
 export function ReferralScreen({ userId, profile }) {
@@ -19,9 +20,7 @@ export function ReferralScreen({ userId, profile }) {
   return (
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ fontFamily: "'Fraunces', serif" }}>
-          Referrals
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Referrals</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
           Earn 5 lifelines when a friend signs up with your link and plays their first game — win or bust, either
           counts.
@@ -29,25 +28,25 @@ export function ReferralScreen({ userId, profile }) {
       </div>
 
       {!userId ? (
-        <div className="w-full max-w-4xl rounded-xl p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
+        <div className="w-full max-w-4xl rounded-lg p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
           Sign in to get your invite link.
         </div>
       ) : (
         <>
-          <div className="w-full max-w-4xl rounded-xl p-4 mb-6" style={{ border: `1px solid ${C.border}` }}>
-            <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
+          <div className="w-full max-w-4xl rounded-lg p-4 mb-6" style={{ border: `1px solid ${C.border}` }}>
+            <div className="text-xs uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
               Your invite link
             </div>
             <div
               className="rounded-lg px-3 py-2 text-sm mb-3 break-all"
-              style={{ border: `1px solid ${C.border}`, color: C.textPrimary, fontFamily: "'IBM Plex Mono', monospace" }}
+              style={{ border: `1px solid ${C.border}`, color: C.textPrimary }}
             >
               {inviteUrl}
             </div>
             <button
               onClick={handleInvite}
-              className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95"
-              style={{ background: C.teal, color: "#0e0e12" }}
+              className="w-full rounded-lg font-semibold py-3 transition-transform active:scale-95"
+              style={{ background: C.accent, color: C.cardInk }}
             >
               Share invite link
             </button>
@@ -59,19 +58,19 @@ export function ReferralScreen({ userId, profile }) {
           </div>
 
           <div className="w-full max-w-4xl grid grid-cols-2 gap-4">
-            <div className="rounded-xl p-4 text-sm" style={{ border: `1px solid ${C.border}` }}>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
+            <div className="rounded-lg p-4 text-sm" style={{ border: `1px solid ${C.border}` }}>
+              <div className="text-xs uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
                 Referred signups
               </div>
-              <div className="text-2xl font-semibold" style={{ color: C.textPrimary }}>
+              <div className="text-2xl font-semibold" style={{ color: C.textPrimary, ...FONT_TABULAR }}>
                 {(profile?.referred_signups_count ?? 0).toLocaleString()}
               </div>
             </div>
-            <div className="rounded-xl p-4 text-sm" style={{ border: `1px solid ${C.border}` }}>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
+            <div className="rounded-lg p-4 text-sm" style={{ border: `1px solid ${C.border}` }}>
+              <div className="text-xs uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
                 Qualified referrals
               </div>
-              <div className="text-2xl font-semibold" style={{ color: C.gold }}>
+              <div className="text-2xl font-semibold" style={{ color: C.accent, ...FONT_TABULAR }}>
                 {(profile?.qualified_referral_count ?? 0).toLocaleString()}
               </div>
             </div>

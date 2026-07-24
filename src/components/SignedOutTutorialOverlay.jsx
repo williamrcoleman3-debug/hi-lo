@@ -62,11 +62,11 @@ export function SignedOutTutorialOverlay({ messages }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.7)" }}>
       <div
-        className="w-full max-w-lg rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-lg p-6 max-h-[90vh] overflow-y-auto"
         style={{ background: C.panel, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold" style={{ fontFamily: "'Fraunces', serif", color: C.textPrimary }}>
+          <h2 className="text-lg font-bold" style={{ color: C.textPrimary }}>
             {current.title}
           </h2>
           <button onClick={handleDismiss} style={{ color: C.textMuted }} aria-label="Close">
@@ -82,7 +82,7 @@ export function SignedOutTutorialOverlay({ messages }) {
               <span
                 key={i}
                 className="w-1.5 h-1.5 rounded-full"
-                style={{ background: i === page ? C.gold : C.border }}
+                style={{ background: i === page ? C.accent : C.border }}
               />
             ))}
           </div>
@@ -99,7 +99,7 @@ export function SignedOutTutorialOverlay({ messages }) {
             <button
               onClick={() => (isLastPage ? handleDismiss() : setPage((p) => p + 1))}
               className="rounded-lg px-3 py-1.5 text-sm font-semibold"
-              style={{ background: C.gold, color: "#14161f" }}
+              style={{ background: C.accent, color: C.cardInk }}
             >
               {isLastPage ? "Got it" : "Next"}
             </button>

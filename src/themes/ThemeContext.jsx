@@ -1,10 +1,10 @@
 import { createContext, useContext } from "react";
-import { THEMES, getTheme } from "./registry.js";
+import { THEMES } from "./registry.js";
 
 const ThemeContext = createContext(THEMES[0].tokens);
 
-export function ThemeProvider({ themeId, children }) {
-  return <ThemeContext.Provider value={getTheme(themeId).tokens}>{children}</ThemeContext.Provider>;
+export function ThemeProvider({ children }) {
+  return <ThemeContext.Provider value={THEMES[0].tokens}>{children}</ThemeContext.Provider>;
 }
 
 // Named to read like the old `import { C } from "../theme"` at call sites:

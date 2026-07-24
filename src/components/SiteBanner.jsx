@@ -16,8 +16,8 @@ export function SiteBanner({ messages }) {
 
   return (
     <div
-      className="w-full max-w-4xl rounded-xl px-4 py-3 mb-4 flex items-start justify-between gap-3 text-sm"
-      style={{ border: `1px solid ${C.gold}`, background: C.goldSoft, color: C.textPrimary }}
+      className="w-full max-w-4xl rounded-lg px-4 py-3 mb-4 flex items-start justify-between gap-3 text-sm"
+      style={{ border: `1px solid ${C.accent}`, background: C.accentSoft, color: C.textPrimary }}
     >
       <span className="flex-1">{message.content}</span>
       <button

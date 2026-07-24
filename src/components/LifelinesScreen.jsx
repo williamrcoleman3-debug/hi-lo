@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
+import { FONT_TABULAR } from "../themes/registry.js";
 import { redeemLifeline, LIFELINE_COST_TOKENS } from "../lifelines/lifelines.js";
 
 export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferrals }) {
@@ -20,9 +21,7 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
   return (
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ fontFamily: "'Fraunces', serif" }}>
-          Lifelines
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Lifelines</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
           🛟 Save the Game — when you're about to bust, spend a lifeline to forgive that one wrong call. Your win
           streak just holds (it doesn't reset, but it doesn't climb either), and you keep playing. Up to 2 per game.
@@ -30,22 +29,22 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
       </div>
 
       {!userId ? (
-        <div className="w-full max-w-4xl rounded-xl p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
+        <div className="w-full max-w-4xl rounded-lg p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
           Sign in to track your lifelines.
         </div>
       ) : (
         <>
-          <div className="w-full max-w-4xl rounded-xl p-4 mb-6 text-center" style={{ border: `1px solid ${C.gold}`, background: C.goldSoft }}>
-            <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
+          <div className="w-full max-w-4xl rounded-lg p-4 mb-6 text-center" style={{ border: `1px solid ${C.accent}`, background: C.accentSoft }}>
+            <div className="text-xs uppercase tracking-widest mb-1" style={{ color: C.textMuted }}>
               Your balance
             </div>
-            <div className="text-3xl font-semibold" style={{ color: C.gold }}>
+            <div className="text-3xl font-semibold" style={{ color: C.accent, ...FONT_TABULAR }}>
               {(profile?.lifeline_balance ?? 0).toLocaleString()}
             </div>
           </div>
 
           <div className="w-full max-w-4xl flex flex-col gap-3">
-            <div className="rounded-xl p-4" style={{ border: `1px solid ${C.border}` }}>
+            <div className="rounded-lg p-4" style={{ border: `1px solid ${C.border}` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
                 New account bonus
               </div>
@@ -54,7 +53,7 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
               </p>
             </div>
 
-            <div className="rounded-xl p-4" style={{ border: `1px solid ${C.border}` }}>
+            <div className="rounded-lg p-4" style={{ border: `1px solid ${C.border}` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
                 Refer a friend — +5
               </div>
@@ -63,13 +62,13 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
                 bust, either counts — you get 5 lifelines.
               </p>
               {onViewReferrals && (
-                <button onClick={onViewReferrals} className="text-xs underline" style={{ color: C.gold }}>
+                <button onClick={onViewReferrals} className="text-xs underline" style={{ color: C.accent }}>
                   Go to Referrals
                 </button>
               )}
             </div>
 
-            <div className="rounded-xl p-4" style={{ border: `1px solid ${C.border}` }}>
+            <div className="rounded-lg p-4" style={{ border: `1px solid ${C.border}` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
                 Redeem tokens — +1
               </div>
@@ -80,7 +79,7 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
               <button
                 onClick={handleRedeem}
                 className="rounded-lg px-4 py-2 text-sm font-semibold transition-transform active:scale-95"
-                style={{ border: `2px solid ${C.teal}`, color: C.teal, background: "transparent" }}
+                style={{ border: `2px solid ${C.accent}`, color: C.accent, background: "transparent" }}
               >
                 Redeem
               </button>

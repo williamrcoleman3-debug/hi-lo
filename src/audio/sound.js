@@ -20,8 +20,8 @@ function getContext() {
 
 // Local-only, not synced to an account -- this is a device/browser sound
 // preference, not a gameplay-affecting setting like game mode, so there's
-// no need for the profiles-column round trip that gameMode/equippedTheme
-// use. Works the same for anonymous and signed-in visitors.
+// no need for the profiles-column round trip that gameMode uses. Works the
+// same for anonymous and signed-in visitors.
 export function isMuted() {
   return localStorage.getItem(MUTE_KEY) === "1";
 }

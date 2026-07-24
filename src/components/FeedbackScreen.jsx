@@ -29,16 +29,14 @@ export function FeedbackScreen({ userId }) {
   return (
     <div className="w-full flex flex-col items-center">
       <div className="w-full max-w-4xl mb-6">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" style={{ fontFamily: "'Fraunces', serif" }}>
-          Feedback
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Feedback</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
           Found a bug, or have an idea? Tell us here.
         </p>
       </div>
 
       {!userId ? (
-        <div className="w-full max-w-4xl rounded-xl p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
+        <div className="w-full max-w-4xl rounded-lg p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
           Sign in to submit feedback.
         </div>
       ) : (
@@ -55,7 +53,7 @@ export function FeedbackScreen({ userId }) {
                 className="px-4 py-2 rounded-lg text-sm font-semibold transition-transform active:scale-95"
                 style={
                   type === t.id
-                    ? { border: `2px solid ${C.gold}`, color: C.gold, background: C.goldSoft }
+                    ? { border: `2px solid ${C.accent}`, color: C.accent, background: C.accentSoft }
                     : { border: `2px solid ${C.border}`, color: C.textMuted, background: "transparent" }
                 }
               >
@@ -70,7 +68,7 @@ export function FeedbackScreen({ userId }) {
             maxLength={2000}
             rows={6}
             placeholder={type === "bug" ? "What happened? What did you expect instead?" : "What should we add or change?"}
-            className="w-full rounded-xl p-4 text-sm resize-none"
+            className="w-full rounded-lg p-4 text-sm resize-none"
             style={{ border: `1px solid ${C.border}`, background: "transparent", color: C.textPrimary }}
           />
 
@@ -81,14 +79,14 @@ export function FeedbackScreen({ userId }) {
           <button
             type="submit"
             disabled={!message.trim() || submitting}
-            className="w-full rounded-xl font-semibold py-3 transition-transform active:scale-95 disabled:opacity-50"
-            style={{ border: `2px solid ${C.gold}`, color: C.gold, background: C.goldSoft }}
+            className="w-full rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-50"
+            style={{ border: `2px solid ${C.accent}`, color: C.accent, background: C.accentSoft }}
           >
             {submitting ? "Sending…" : "Submit"}
           </button>
 
           {result === "sent" && (
-            <p className="text-sm text-center" style={{ color: C.gold }}>
+            <p className="text-sm text-center" style={{ color: C.accent }}>
               Thanks — got it.
             </p>
           )}

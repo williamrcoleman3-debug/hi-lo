@@ -1,85 +1,71 @@
-export const THEME_IDS = {
-  CLASSIC: "classic",
-  POKER_TABLE: "poker-table",
-};
+// Single geometric sans-serif stack, used everywhere -- no web fonts, no
+// serif headers, no monospace. Numbers that matter use font-variant-numeric:
+// tabular-nums instead of a monospace family (see FONT_TABULAR).
+export const FONT_STACK = '-apple-system, "Segoe UI", Roboto, sans-serif';
+export const FONT_TABULAR = { fontFamily: FONT_STACK, fontVariantNumeric: "tabular-nums" };
 
-// Same token shape as the original src/theme.js — every component still does
-// style={{ color: C.gold }} etc, only the source of C changes now.
-const classicTokens = {
-  bg: "#0e0e12",
-  panel: "#14161f",
-  cardBack1: "#1a1d29",
-  cardBack2: "#12141c",
-  border: "#3a3f4f",
-  borderStrong: "#6a7086",
-  textPrimary: "#ffffff",
-  textSecondary: "#c3c8d6",
-  textMuted: "#9096a8",
-  gold: "#d4af6a",
-  goldSoft: "rgba(212,175,106,0.12)",
-  teal: "#2fa8a0",
-  tealSoft: "rgba(47,168,160,0.12)",
-  ember: "#e8763c",
-  emberBorder: "#7a2b28",
-  cardFace: "#ffffff",
-  cardTrim: "#1e2a4a",
-  cardRed: "#a3231d",
-  cardBlack: "#0f1115",
-  win: "#3ddc84",
-  lose: "#ff4d4d",
-  // Frames the table area — invisible for Classic, which never had this.
-  tableFrameBorder: "none",
-  tableFrameShadow: "none",
-  winFlashOverlay: "radial-gradient(circle at 50% 30%, rgba(61,220,132,0.25), transparent 70%)",
-  loseFlashOverlay: "radial-gradient(circle at 50% 30%, rgba(255,77,77,0.28), transparent 70%)",
-};
+// Dark, flat, fintech-dashboard palette. One theme -- there is no longer a
+// Poker Table alternate (its felt-gradient/wooden-frame look was gradient-
+// and-shadow-based, both banned by this redesign, and with only one theme
+// left an equip/preview picker in Unlocks would just be clutter, so that UI
+// was removed rather than kept for a single always-equipped entry).
+const tokens = {
+  bg: "#0B0E14",
+  panel: "#151923",
+  border: "#1E2430",
+  borderStrong: "#2E3646",
+  textPrimary: "#E7EAF0",
+  textSecondary: "#A9B2C3",
+  textMuted: "#7A8496",
 
-// Deep matte felt green, mahogany rail, and a gold pushed slightly brighter
-// than Classic's so it stays legible against green instead of near-black.
-// Win flash moves to gold/white here — green-on-green wouldn't read at all.
-const pokerTableTokens = {
-  ...classicTokens,
-  bg: "radial-gradient(ellipse at center, #1c5b43 0%, #0f4429 100%)",
-  panel: "rgba(8, 30, 22, 0.55)",
-  border: "#2f6b52",
-  borderStrong: "#4f8d70",
-  textSecondary: "#dce9e2",
-  textMuted: "#a9c4b7",
-  gold: "#f2c96b",
-  goldSoft: "rgba(242, 201, 107, 0.16)",
-  emberBorder: "#5c2420",
-  tableFrameBorder: "10px solid #4a2c1a",
-  tableFrameShadow: "inset 0 0 0 3px #7a5230, 0 8px 24px rgba(0,0,0,0.5)",
-  winFlashOverlay: "radial-gradient(circle at 50% 30%, rgba(255,215,120,0.35), transparent 70%)",
+  // Single accent -- replaces the old two-tier gold (primary)/teal
+  // (secondary) split. Used for the streak number, links, active states,
+  // and any primary CTA that isn't a game outcome.
+  accent: "#2DD4BF",
+  accentSoft: "rgba(45,212,191,0.12)",
+
+  // Reserved exclusively for actual outcomes -- never used to pre-color a
+  // call button, since correctness depends on the card drawn, not which
+  // button was pressed.
+  win: "#22C55E",
+  winSoft: "rgba(34,197,94,0.12)",
+  // Flat full-screen flash fill -- replaces the old radial-gradient flash
+  // overlay (banned by the no-gradient rule), just a stronger flat alpha
+  // than winSoft/loseSoft so it still reads as feedback in ~180ms.
+  winFlash: "rgba(34,197,94,0.22)",
+  lose: "#EF4444",
+  loseSoft: "rgba(239,68,68,0.12)",
+  loseFlash: "rgba(239,68,68,0.22)",
+
+  // Caution/draft tone -- for notices that aren't a game outcome (daily
+  // play-limit banner, legal-draft disclaimer) but shouldn't be neutral.
+  caution: "#F59E0B",
+  cautionSoft: "rgba(245,158,11,0.12)",
+
+  cardFace: "#E7EAF0",
+  cardInk: "#0B0E14",
+  // Muted red for suit ink -- deliberately distinct from `lose` so a red
+  // heart/diamond never reads as an alert.
+  cardRedInk: "#B8464C",
+
+  // The 5 call buttons each keep a distinct identity color (unchanged from
+  // before), just rendered as solid fills now instead of outlines. None of
+  // these is `win`/`lose` -- see comment above.
+  callLower: "#2DD4BF", // same as accent
+  callSame: "#8B5CF6",
+  callHigher: "#F59E0B", // same as caution
+  callRed: "#B8464C", // same as cardRedInk
+  callBlack: "#E7EAF0",
 };
 
 export const THEMES = [
   {
-    id: THEME_IDS.CLASSIC,
-    name: "Classic",
-    preview: { colors: ["#0e0e12", "#14161f", "#d4af6a"] },
-    isUnlocked: () => true,
-    unlockDescription: null,
-    tokens: classicTokens,
-  },
-  {
-    id: THEME_IDS.POKER_TABLE,
-    name: "Poker Table",
-    preview: { colors: ["#1c5b43", "#4a2c1a", "#f2c96b"] },
-    // Used to gate on reaching Single Deck — that stopped making sense once
-    // Single Deck became available immediately with nothing to progress
-    // from (see engine/decks.js's ACTIVE_DECKS). Unlocked by default now,
-    // same as Classic.
-    isUnlocked: () => true,
-    unlockDescription: null,
-    tokens: pokerTableTokens,
+    id: "default",
+    name: "Default",
+    tokens,
   },
 ];
 
-export function getTheme(id) {
-  return THEMES.find((t) => t.id === id) ?? THEMES[0];
-}
-
-export function computeUnlockedThemes(ctx) {
-  return THEMES.filter((t) => t.isUnlocked(ctx)).map((t) => t.id);
+export function getTheme() {
+  return THEMES[0];
 }

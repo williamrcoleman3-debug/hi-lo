@@ -38,6 +38,7 @@ export function GameScreenView({
   growths,
   lifelinesUsedThisGame,
   sessionSpeedMode,
+  history,
   makeCall,
   advanceHand,
   cashOut,
@@ -66,6 +67,14 @@ export function GameScreenView({
       : { border: `1px solid ${C.border}`, background: C.panel, color: C.textSecondary };
 
   const callDisabled = (p) => revealing || p <= 0;
+
+  // One card in active play at a time: whatever was just drawn (the result
+  // of the last call) if there is one, otherwise the card being called
+  // against. The drawn card becomes the next compare card automatically
+  // (Speed Mode) or on tap/timeout (Bank Mode's Skip), so this is never
+  // ambiguous -- there's exactly one "active" card at any moment.
+  const activeCard = revealedCard ?? compareCard;
+  const activeCardPop = revealing || !!revealedCard || (sessionSpeedMode && justWon);
 
   // Glow only, never a size change (would shift layout) -- intensity ramps
   // with the current streak and caps at streak 10, so it never keeps
@@ -151,19 +160,39 @@ export function GameScreenView({
         <div className="w-full grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-8">
           {/* Table */}
           <div className="flex flex-col items-center">
-            <div className="flex items-center gap-6 mb-2">
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
-                  current
-                </span>
-                <Card card={compareCard} pop={sessionSpeedMode && justWon} />
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
-                  next
-                </span>
-                <Card card={revealedCard} hidden={!revealedCard} pop={revealing || !!revealedCard} />
-              </div>
+            <div className="mb-2">
+              <Card card={activeCard} hidden={!activeCard} pop={activeCardPop} />
+            </div>
+
+            {/* Last 5 resolved hands, most recent first (left, next to the
+                active card). Always reserves 5 slots so the strip's width
+                never shifts as hands accumulate early in a game -- empty
+                slots are invisible spacers, not placeholder cards. Sized to
+                exactly match the active card's width (same w-36/sm:w-44 as
+                Card.jsx) with flexbox dividing that width evenly across 5
+                mini cards + 4 small gaps, so it scales with the same
+                breakpoint automatically. */}
+            <div className="w-36 sm:w-44 flex gap-1 mb-3">
+              {Array.from({ length: 5 }, (_, i) => history[i]).map((h, i) =>
+                h ? (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div
+                      className="w-full aspect-[5/7] rounded-lg flex items-center justify-center"
+                      style={{ background: C.cardFace, border: `1px solid ${C.border}` }}
+                    >
+                      <span
+                        className="text-sm font-bold"
+                        style={{ color: h.card.suit.color === "red" ? C.cardRedInk : C.cardInk }}
+                      >
+                        {h.card.rank.key}
+                      </span>
+                    </div>
+                    <div className="w-full h-1 rounded-full" style={{ background: h.correct ? C.win : C.lose }} />
+                  </div>
+                ) : (
+                  <div key={i} className="flex-1" aria-hidden="true" />
+                )
+              )}
             </div>
 
             <div className="text-xs uppercase tracking-widest mb-3 text-center" style={{ color: C.textMuted }}>

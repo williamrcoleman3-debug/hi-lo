@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveProbs, growthFor, TIMER_MS, AUTO_ADVANCE_MS, DEFAULT_PRICING_MODE } from "../engine";
 import { MAX_LIFELINES_PER_GAME } from "../lifelines/lifelines.js";
 import { startGame, makeServerCall, useLifelineInSession, bustSession, bankSession } from "../session/gameSession.js";
+import { playClickTone, playWinTone, playLoseTone } from "../audio/sound.js";
 
-const REVEAL_DELAY_MS = 500;
+const FLASH_MS = 180;
+const SHAKE_MS = 180;
+const WIN_POP_MS = 180;
 
 // Server-authoritative counterpart to hooks/useGame.js, same return shape
 // (see that file's header comment), used for signed-in play. The deck
@@ -11,8 +14,17 @@ const REVEAL_DELAY_MS = 500;
 // (the one card the server has revealed). Every call, lifeline use, bust,
 // and bank goes through a Supabase RPC (see src/session/gameSession.js)
 // that owns the actual shoe; this hook only tracks what the server told it
-// plus purely cosmetic pacing state (the reveal delay, the timer, flashes/
-// toasts) that has no bearing on the outcome.
+// plus purely cosmetic pacing state (the timer, flashes/toasts) that has
+// no bearing on the outcome. Results apply the instant the network
+// response arrives -- no artificial delay layered on top of it (there used
+// to be one; removed for speed, see the "feel instant" pass this hook was
+// rewritten for).
+//
+// speedMode is captured into a ref at the moment each game starts (see
+// speedModeRef below), not read live from the prop during an active game --
+// this mirrors game_sessions.speed_mode on the server, which is fixed for
+// a session's whole lifetime. Changing your Bank/Speed preference mid-game
+// only affects the *next* game you start, never the one in progress.
 //
 // The displayed odds/payout multiplier (`probs`/`growths`) still uses the
 // same client-side calcBaselineProbs/growthFor as the local engine — that
@@ -21,7 +33,7 @@ const REVEAL_DELAY_MS = 500;
 // no secret to protect and no need to round-trip to the server just to
 // show a number. The server independently recomputes the same formula
 // when it actually resolves a call, rather than trusting anything sent to it.
-export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {}) {
+export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, speedMode = false } = {}) {
   const [sessionId, setSessionId] = useState(null);
   const [compareCard, setCompareCard] = useState(null);
   const [revealedCard, setRevealedCard] = useState(null);
@@ -35,16 +47,18 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
   const [revealing, setRevealing] = useState(false);
   const [flash, setFlash] = useState(null);
   const [shake, setShake] = useState(false);
-  const [justClimbed, setJustClimbed] = useState(false);
+  const [justWon, setJustWon] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [timeLeft, setTimeLeft] = useState(TIMER_MS);
   const [lifelinesUsedThisGame, setLifelinesUsedThisGame] = useState(0);
   const [pendingBustCard, setPendingBustCard] = useState(null);
+  const [sessionSpeedMode, setSessionSpeedMode] = useState(false);
 
   const toastId = useRef(0);
   const intervalRef = useRef(null);
   const autoAdvanceRef = useRef(null);
   const isFirstDeckRender = useRef(true);
+  const speedModeRef = useRef(speedMode);
 
   const decisionPaused = status !== "playing" || revealing || awaitingAdvance;
   const probs = compareCard
@@ -67,14 +81,18 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
 
   const fireFlash = useCallback((type) => {
     setFlash(type);
-    setTimeout(() => setFlash(null), 420);
+    setTimeout(() => setFlash(null), FLASH_MS);
   }, []);
 
   const startNewGame = useCallback(async () => {
     setStatus("loading");
     setMessage("Dealing…");
     try {
-      const result = await startGame(deckConfig.id);
+      // Captured once per game, not read live -- see the header comment on
+      // why this can't just reference the `speedMode` prop directly inside
+      // makeCall below.
+      speedModeRef.current = speedMode;
+      const result = await startGame(deckConfig.id, speedMode);
       setSessionId(result.sessionId);
       setCompareCard(result.compareCard);
       setCardsLeft(result.cardsLeft);
@@ -87,6 +105,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
       setShake(false);
       setLifelinesUsedThisGame(0);
       setPendingBustCard(null);
+      setSessionSpeedMode(speedMode);
     } catch (err) {
       console.error("startGame failed:", err.message);
       setMessage(
@@ -96,11 +115,15 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
       );
       setStatus("busted");
     }
-  }, [deckConfig.id]);
+  }, [deckConfig.id, speedMode]);
 
   // Switching decks abandons the current game (like letting the timer run
   // out) and deals a fresh shoe for the new deck. Skipped on mount --
-  // startNewGame() below already covers the initial deal.
+  // startNewGame() below already covers the initial deal. Deliberately
+  // keyed only on deckConfig.id, not speedMode -- changing your Bank/Speed
+  // preference mid-game must never interrupt a game already in progress
+  // (see the header comment on speedModeRef); it only takes effect the
+  // next time startNewGame() is actually called.
   useEffect(() => {
     if (isFirstDeckRender.current) {
       isFirstDeckRender.current = false;
@@ -136,7 +159,8 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
       setMessage(reasonMsg);
       fireFlash("lose");
       setShake(true);
-      setTimeout(() => setShake(false), 420);
+      setTimeout(() => setShake(false), SHAKE_MS);
+      playLoseTone();
       finishGame(bustSession, false, finalBanked);
     },
     [fireFlash, finishGame]
@@ -177,60 +201,73 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
     (call) => {
       if (status !== "playing" || revealing || awaitingAdvance || !sessionId) return;
 
+      playClickTone();
       setRevealing(true);
 
       (async () => {
         try {
           const result = await makeServerCall(sessionId, call);
-          setTimeout(() => {
-            setRevealedCard(result.drawnCard);
-            setCardsLeft(result.cardsLeft);
+          // Applied the instant the network response arrives -- no
+          // artificial pre-delay. `revealing` (which gates input) drops
+          // in this same synchronous block too, so the only thing that
+          // ever blocked the next guess was the network round trip itself.
+          setRevealedCard(result.drawnCard);
+          setCardsLeft(result.cardsLeft);
 
-            if (result.correct) {
-              setWinStreak(result.winStreak);
-              setBanked(result.banked);
-              setJustClimbed(true);
-              setTimeout(() => setJustClimbed(false), 400);
-              spawnToast(`+${result.gain.toLocaleString()}`);
-              fireFlash("win");
+          if (result.correct) {
+            setWinStreak(result.winStreak);
+            setBanked(result.banked);
+            setJustWon(true);
+            setTimeout(() => setJustWon(false), WIN_POP_MS);
+            spawnToast(`+${result.gain.toLocaleString()}`);
+            fireFlash("win");
+            playWinTone();
 
-              if (result.status === "cashed") {
-                // The server already auto-finalized this session as a win
-                // (a lifeline-used game that just cleared the full deck --
-                // see make_call's full-clear check). Voluntary banking was
-                // disabled the moment a lifeline was used, so this is the
-                // only way that payout could ever be collected. Nothing
-                // left to call here -- reflect the result directly, don't
-                // fire bankSession() again (there's nothing left to finalize).
-                setTotalTokens((t) => t + result.banked);
-                setStatus("cashed");
-                setMessage(`Cleared the deck! Banked ${result.banked.toLocaleString()} points.`);
-                onGameEnd?.(deckConfig.id, { amount: result.banked, wasBanked: true, isNewPeak: result.isNewPeak });
-              } else {
-                setAwaitingAdvance(true);
-                setMessage(
-                  call === "same"
-                    ? `Same rank! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
-                    : call === "red" || call === "black"
-                    ? `${call === "red" ? "Red" : "Black"}! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
-                    : `Correct — win streak ${result.winStreak}. +${result.gain.toLocaleString()} tokens. Tap to keep going.`
-                );
-              }
-            } else if (lifelineAvailable) {
-              setPendingBustCard(result.drawnCard);
-              setStatus("lifeline-offer");
-              setMessage(
-                `Wrong — drew ${result.drawnCard.rank.key}${result.drawnCard.suit.symbol}. Use a Save the Game lifeline to keep your ${winStreak}-hand streak alive?`
-              );
+            if (result.status === "cashed") {
+              // The server already auto-finalized this session as a win --
+              // either a lifeline-used game or a Speed Mode game that just
+              // cleared the full deck (see make_call's full-clear check).
+              // Voluntary banking isn't available in either case, so this
+              // is the only way that payout could ever be collected.
+              // Nothing left to call here -- reflect the result directly,
+              // don't fire bankSession() again (nothing left to finalize).
+              setTotalTokens((t) => t + result.banked);
+              setStatus("cashed");
+              setMessage(`Cleared the deck! Banked ${result.banked.toLocaleString()} points.`);
+              onGameEnd?.(deckConfig.id, { amount: result.banked, wasBanked: true, isNewPeak: result.isNewPeak });
+            } else if (speedModeRef.current) {
+              // Speed Mode: the just-revealed card becomes the new compare
+              // card immediately -- same effect as advanceHand() below,
+              // just automatic instead of gated behind a tap or timer. The
+              // win-pop plays on the card as pure decoration; nothing
+              // waits on it.
+              setCompareCard(result.drawnCard);
+              setRevealedCard(null);
+              setMessage("Call it before the clock runs out.");
             } else {
-              // Not eligible for a lifeline (none left, or already used the
-              // per-game cap) -- the server already parked the session in
-              // 'lifeline-offer', so finalize it as a bust right away
-              // rather than showing an offer the player can't act on.
-              resolveBust(`Busted on ${result.drawnCard.rank.key}${result.drawnCard.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`, banked);
+              setAwaitingAdvance(true);
+              setMessage(
+                call === "same"
+                  ? `Same rank! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
+                  : call === "red" || call === "black"
+                  ? `${call === "red" ? "Red" : "Black"}! +${result.gain.toLocaleString()} tokens. Tap to keep going.`
+                  : `Correct — win streak ${result.winStreak}. +${result.gain.toLocaleString()} tokens. Tap to keep going.`
+              );
             }
-            setRevealing(false);
-          }, REVEAL_DELAY_MS);
+          } else if (lifelineAvailable) {
+            setPendingBustCard(result.drawnCard);
+            setStatus("lifeline-offer");
+            setMessage(
+              `Wrong — drew ${result.drawnCard.rank.key}${result.drawnCard.suit.symbol}. Use a Save the Game lifeline to keep your ${winStreak}-hand streak alive?`
+            );
+          } else {
+            // Not eligible for a lifeline (none left, or already used the
+            // per-game cap) -- the server already parked the session in
+            // 'lifeline-offer', so finalize it as a bust right away
+            // rather than showing an offer the player can't act on.
+            resolveBust(`Busted on ${result.drawnCard.rank.key}${result.drawnCard.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`, banked);
+          }
+          setRevealing(false);
         } catch (err) {
           console.error("makeCall failed:", err.message);
           setRevealing(false);
@@ -303,12 +340,13 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0 } = {
     revealing,
     flash,
     shake,
-    justClimbed,
+    justWon,
     toasts,
     timeLeft,
     probs,
     growths,
     lifelinesUsedThisGame,
+    sessionSpeedMode,
     makeCall,
     advanceHand,
     cashOut,

@@ -95,6 +95,14 @@ create table public.profiles (
   -- unexpected emoji rendered back to the same account that set it).
   username text not null check (char_length(username) between 2 and 16 and username ~ '^[A-Za-z]+$'),
   avatar text not null default '😀',
+  -- Pacing/mechanic preference, not a race-sensitive value -- same "direct
+  -- client update, no RPC" pattern as equipped_theme below. 'bank' is
+  -- today's game unchanged (Bank anytime, win pauses briefly). 'speed' has
+  -- no pause and no voluntary banking -- a game can only end by busting or
+  -- fully clearing the deck. Read by start_game() to set game_sessions.
+  -- speed_mode, which is what actually enforces the no-banking restriction
+  -- server-side -- this column alone is just the player's stored preference.
+  game_mode text not null default 'bank' check (game_mode in ('bank', 'speed')),
   current_streak integer not null default 0,
   longest_streak integer not null default 0,
   last_banked_date date,
@@ -1028,6 +1036,15 @@ create table public.game_sessions (
   ever_same_hit boolean not null default false,
   ever_red_black_hit boolean not null default false,
   lowest_same_odds double precision,
+  -- Set once at start_game() from the player's profiles.game_mode
+  -- preference, fixed for the life of the session (changing your
+  -- preference mid-game doesn't retroactively alter a session already in
+  -- progress). Speed-mode sessions are barred from voluntary banking in
+  -- bank_session() below, the same way lifelines_used > 0 already is --
+  -- and for the same reason, make_call()'s full-clear auto-finalize check
+  -- covers speed_mode too, since it would otherwise be the one condition
+  -- with no way to ever collect the payout.
+  speed_mode boolean not null default false,
   status text not null default 'playing' check (status in ('playing', 'lifeline-offer', 'busted', 'cashed')),
   -- One timestamp appended per make_call, win or lose -- piggybacked onto
   -- that function's existing per-hand UPDATE (no separate write path). Used
@@ -1149,7 +1166,20 @@ revoke all on function public.check_daily_play_limit() from public, anon, authen
 -- the shoe minus its first card, and returns only that first card plus the
 -- session id and how many cards are left. The rest of the shoe never
 -- leaves the server.
-create or replace function public.start_game(p_deck_id text)
+--
+-- p_speed_mode fixes the session's pacing/mechanic for its whole lifetime
+-- (see game_sessions.speed_mode above) -- the client passes the player's
+-- current profiles.game_mode preference at call time; changing the
+-- preference afterward never affects a session already in progress.
+-- Dropped and recreated (not just replaced) because adding a parameter to
+-- an existing function creates a second overload rather than replacing it
+-- -- Postgres identifies functions by name + argument types, and
+-- start_game(text) and start_game(text, boolean) are different signatures.
+-- Two overloads would leave PostgREST unable to resolve which one a call
+-- with just p_deck_id should hit.
+drop function if exists public.start_game(text);
+
+create function public.start_game(p_deck_id text, p_speed_mode boolean default false)
 returns table (session_id uuid, compare_card jsonb, cards_left int, ante bigint)
 language plpgsql
 security definer
@@ -1170,16 +1200,16 @@ begin
   v_compare := v_deck[1];
   v_deck := v_deck[2:array_length(v_deck, 1)];
 
-  insert into public.game_sessions (user_id, deck_id, deck, compare_card)
-  values (auth.uid(), p_deck_id, v_deck, v_compare)
+  insert into public.game_sessions (user_id, deck_id, deck, compare_card, speed_mode)
+  values (auth.uid(), p_deck_id, v_deck, v_compare, coalesce(p_speed_mode, false))
   returning id into v_session_id;
 
   return query select v_session_id, v_compare, array_length(v_deck, 1), public.deck_ante(p_deck_id);
 end;
 $$;
 
-revoke all on function public.start_game(text) from public, anon, authenticated;
-grant execute on function public.start_game(text) to authenticated;
+revoke all on function public.start_game(text, boolean) from public, anon, authenticated;
+grant execute on function public.start_game(text, boolean) to authenticated;
 
 -- The one call-resolution endpoint. Draws the next card from the server's
 -- own copy of the deck, decides correctness itself, and independently
@@ -1193,13 +1223,17 @@ grant execute on function public.start_game(text) to authenticated;
 -- Exploit fix: once a lifeline has been used this session, voluntary
 -- banking is disabled (see bank_session) to close a bootstrapping loop
 -- where a lifeline-saved near-bust could be cashed out for far more tokens
--- than the lifeline cost. The only two outcomes left from that point on are
--- busting (0 tokens) or actually clearing the full deck -- so reaching the
--- full-clear target on a lifeline-used session auto-finalizes as a win
--- right here, since the player has no other way to collect the payout.
--- Lifeline-free play is completely untouched: this block only ever runs
--- when lifelines_used > 0, so a normal game can still climb past the
--- target and bank whenever the player chooses, exactly as before.
+-- than the lifeline cost. Speed-mode sessions (game_sessions.speed_mode)
+-- have voluntary banking disabled unconditionally, by design -- a Speed
+-- Mode game is meant to only ever end by busting or fully clearing the
+-- deck. Either way, the only two outcomes left are busting (0 tokens) or
+-- actually clearing the full deck -- so reaching the full-clear target on
+-- a lifeline-used OR speed-mode session auto-finalizes as a win right
+-- here, since the player has no other way to collect the payout. Normal
+-- Bank Mode play with no lifeline used is completely untouched: this
+-- block only ever runs when one of those two conditions holds, so a
+-- normal game can still climb past the target and bank whenever the
+-- player chooses, exactly as before.
 create or replace function public.make_call(p_session_id uuid, p_call text)
 returns table (correct boolean, drawn_card jsonb, banked bigint, win_streak int, status text, gain bigint, cards_left int, is_new_peak boolean)
 language plpgsql
@@ -1308,7 +1342,7 @@ begin
 
     v_full_clear_target := public.full_clear_target(v_session.deck_id);
 
-    if v_session.lifelines_used > 0 and v_new_streak >= v_full_clear_target then
+    if (v_session.lifelines_used > 0 or v_session.speed_mode) and v_new_streak >= v_full_clear_target then
       select f.is_new_peak into v_is_new_peak from public.finalize_session(p_session_id, true) as f;
       return query select true, v_drawn, v_new_banked, v_new_streak, 'cashed'::text, v_gain, array_length(v_deck, 1), v_is_new_peak;
       return;
@@ -1753,6 +1787,13 @@ grant execute on function public.bust_session(uuid) to authenticated;
 -- clearing the full deck, which auto-finalizes from within make_call
 -- itself (see that function) since voluntary banking is no longer
 -- available to collect it. Lifeline-free games are entirely unaffected.
+--
+-- Speed Mode: rejects unconditionally, for the whole life of the session,
+-- regardless of lifelines -- this is the actual server-side enforcement of
+-- the mode's "no voluntary banking, ever" mechanic (game_sessions.
+-- speed_mode is fixed at start_game() and can't change mid-session). Same
+-- reasoning as the lifeline case: the only two outcomes are busting or a
+-- full clear, and a full clear auto-finalizes from make_call.
 create or replace function public.bank_session(p_session_id uuid)
 returns table (is_new_peak boolean)
 language plpgsql
@@ -1764,13 +1805,15 @@ declare
   v_status text;
   v_banked bigint;
   v_lifelines_used int;
+  v_speed_mode boolean;
 begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
   perform public.check_rate_limit();
 
-  select user_id, status, banked, lifelines_used into v_owner, v_status, v_banked, v_lifelines_used
+  select user_id, status, banked, lifelines_used, speed_mode
+    into v_owner, v_status, v_banked, v_lifelines_used, v_speed_mode
     from public.game_sessions where id = p_session_id for update;
   if v_owner is null or v_owner <> auth.uid() then
     raise exception 'no such session';
@@ -1783,6 +1826,9 @@ begin
   end if;
   if v_lifelines_used > 0 then
     raise exception 'banking is disabled after using a lifeline this game -- bust or clear the deck to end it';
+  end if;
+  if v_speed_mode then
+    raise exception 'speed mode has no voluntary banking -- bust or clear the deck to end it';
   end if;
 
   return query select * from public.finalize_session(p_session_id, true);

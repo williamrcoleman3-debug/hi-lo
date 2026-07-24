@@ -56,10 +56,12 @@ export default function App() {
     deckProgress,
     equippedTheme,
     unlockedThemeIds,
+    gameMode,
     recordCorrectCall,
     refreshDeckProgress,
     selectDeck,
     setEquippedTheme,
+    setGameMode,
   } = useProgress(userId);
   const { messages } = useSiteMessages();
 
@@ -78,10 +80,12 @@ export default function App() {
         deckProgress={deckProgress}
         equippedTheme={equippedTheme}
         unlockedThemeIds={unlockedThemeIds}
+        gameMode={gameMode}
         recordCorrectCall={recordCorrectCall}
         refreshDeckProgress={refreshDeckProgress}
         selectDeck={selectDeck}
         setEquippedTheme={setEquippedTheme}
+        setGameMode={setGameMode}
         messages={messages}
       />
     </ThemeProvider>
@@ -101,10 +105,12 @@ function AppShell({
   deckProgress,
   equippedTheme,
   unlockedThemeIds,
+  gameMode,
   recordCorrectCall,
   refreshDeckProgress,
   selectDeck,
   setEquippedTheme,
+  setGameMode,
   messages,
 }) {
   const C = useThemeTokens();
@@ -149,6 +155,7 @@ function AppShell({
           selectedDeckConfig={selectedDeckConfig}
           unlockedDecks={unlockedDecks}
           deckProgress={deckProgress}
+          gameMode={gameMode}
           recordCorrectCall={recordCorrectCall}
           refreshDeckProgress={refreshDeckProgress}
           selectDeck={selectDeck}
@@ -172,6 +179,8 @@ function AppShell({
               unlockedThemeIds={unlockedThemeIds}
               equippedTheme={equippedTheme}
               setEquippedTheme={setEquippedTheme}
+              gameMode={gameMode}
+              setGameMode={setGameMode}
             />
           </div>
         )}

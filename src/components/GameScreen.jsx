@@ -60,13 +60,14 @@ function useShareAndRedeem({ profile, refreshProfile, banked, status, startNewGa
 }
 
 function AnonymousGameScreen(props) {
-  const { selectedDeckConfig, recordCorrectCall } = props;
+  const { selectedDeckConfig, recordCorrectCall, gameMode } = props;
 
   const game = useGame(selectedDeckConfig, {
     onCorrectCall: recordCorrectCall,
     onGameEnd: undefined, // anonymous play never touches the server
     lifelineBalance: 0,
     onUseLifeline: undefined,
+    speedMode: gameMode === "speed",
   });
 
   const glue = useShareAndRedeem({
@@ -83,11 +84,12 @@ function AnonymousGameScreen(props) {
 }
 
 function SignedInGameScreen(props) {
-  const { selectedDeckConfig, profile, refreshProfile, refreshDeckProgress } = props;
+  const { selectedDeckConfig, profile, refreshProfile, refreshDeckProgress, gameMode } = props;
   const [isNewPeak, setIsNewPeak] = useState(false);
 
   const game = useServerGame(selectedDeckConfig, {
     lifelineBalance: profile?.lifeline_balance ?? 0,
+    speedMode: gameMode === "speed",
     onGameEnd: (_deckId, { wasBanked, isNewPeak: newPeak }) => {
       setIsNewPeak(newPeak);
       // A Bank may have just advanced the daily streak / lifeline reward

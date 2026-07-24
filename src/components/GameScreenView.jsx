@@ -119,10 +119,10 @@ export function GameScreenView({
         </div>
         <div className="text-right">
           <div className="text-xs uppercase tracking-widest" style={{ color: C.textMuted }}>
-            vault
+            {sessionSpeedMode ? "streak" : "vault"}
           </div>
           <div className="text-2xl font-semibold" style={{ color: C.accent, ...FONT_TABULAR }}>
-            {totalTokens.toLocaleString()}
+            {(sessionSpeedMode ? winStreak : totalTokens).toLocaleString()}
           </div>
           {userId && (
             <div className="mt-1 flex items-center justify-end gap-2 text-xs">

@@ -74,7 +74,11 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
   const [timeLeft, setTimeLeft] = useState(TIMER_MS);
   const [lifelinesUsedThisGame, setLifelinesUsedThisGame] = useState(0);
   const [pendingBustCard, setPendingBustCard] = useState(null);
-  const [sessionSpeedMode, setSessionSpeedMode] = useState(false);
+  // Matches speedModeRef's initializer below -- the very first game's deck
+  // is already built synchronously above (startNewGame() is skipped on
+  // mount, see the deck-switch effect), so this can't wait for
+  // startNewGame() to set it or it'd be stale (false) for that first game.
+  const [sessionSpeedMode, setSessionSpeedMode] = useState(() => speedMode);
   // Last 5 resolved hands, most recent first -- reflects whether the call
   // itself was right or wrong, independent of a lifeline later forgiving a
   // wrong one (the guess was still factually wrong). Reset each new game.

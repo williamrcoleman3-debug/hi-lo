@@ -102,7 +102,7 @@ export function AuthWidget() {
 
   if (user && !loading && profile) {
     return (
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
         <span aria-hidden="true">{profile.avatar}</span>
         <span style={{ color: C.textSecondary }}>{profile.username}</span>
         {profile.current_streak > 0 && (

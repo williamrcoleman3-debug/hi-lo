@@ -52,7 +52,10 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
   const [timeLeft, setTimeLeft] = useState(TIMER_MS);
   const [lifelinesUsedThisGame, setLifelinesUsedThisGame] = useState(0);
   const [pendingBustCard, setPendingBustCard] = useState(null);
-  const [sessionSpeedMode, setSessionSpeedMode] = useState(false);
+  // Matches speedModeRef's initializer below -- avoids a brief incorrect
+  // value during the initial "Dealing…" loading state, before the first
+  // startNewGame() call resolves and sets this properly.
+  const [sessionSpeedMode, setSessionSpeedMode] = useState(() => speedMode);
   // Last 5 resolved hands, most recent first -- see useGame.js's matching
   // comment for why this reflects the call's correctness independent of a
   // later lifeline forgiving it.

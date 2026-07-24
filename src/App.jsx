@@ -120,7 +120,7 @@ function AppShell({
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col items-center px-4 py-8"
+      className="min-h-screen w-full flex flex-col items-center px-4 py-8 overflow-x-hidden"
       style={{ background: C.bg, color: C.textPrimary, fontFamily: FONT_STACK }}
     >
       <div className="w-full max-w-4xl flex items-center justify-between mb-6">

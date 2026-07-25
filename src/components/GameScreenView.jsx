@@ -244,7 +244,7 @@ export function GameScreenView({
                   onClick={() => makeCall("same")}
                   disabled={callDisabled(probs.pSame)}
                   className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ background: C.callSame, color: C.textPrimary }}
+                  style={{ background: C.callSame, color: C.cardInk }}
                 >
                   Same
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
@@ -271,7 +271,7 @@ export function GameScreenView({
                   onClick={() => makeCall("red")}
                   disabled={callDisabled(probs.pRed)}
                   className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ background: C.callRed, color: C.textPrimary }}
+                  style={{ background: C.callRed, color: C.cardInk }}
                 >
                   Red
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
@@ -282,7 +282,7 @@ export function GameScreenView({
                   onClick={() => makeCall("black")}
                   disabled={callDisabled(probs.pBlack)}
                   className="rounded-lg font-semibold py-3 transition-transform active:scale-95 disabled:opacity-30"
-                  style={{ background: C.callBlack, color: C.cardInk }}
+                  style={{ background: C.callBlack, border: `1px solid ${C.callBlackBorder}`, color: C.textPrimary }}
                 >
                   Black
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
@@ -383,7 +383,7 @@ export function GameScreenView({
             <WinStreakLeaderboardWidget onViewFull={onViewFullLeaderboard} />
             <div
               className="hidden sm:flex w-full flex-col gap-2 text-xs pt-3"
-              style={{ color: C.textSecondary, borderTop: `1px solid ${C.border}` }}
+              style={{ color: C.textMuted, borderTop: `1px solid ${C.border}` }}
             >
               <div className="flex justify-between">
                 <span>cards left</span>
@@ -391,11 +391,11 @@ export function GameScreenView({
               </div>
               <div className="flex justify-between">
                 <span>win streak</span>
-                <span style={{ color: C.textPrimary, ...FONT_TABULAR, ...streakGlowStyle }}>{winStreak}</span>
+                <span style={{ color: C.accent, ...FONT_TABULAR, ...streakGlowStyle }}>{winStreak}</span>
               </div>
               <div className="flex justify-between">
                 <span>at risk</span>
-                <span style={{ color: C.accent, ...FONT_TABULAR }}>{banked.toLocaleString()}</span>
+                <span style={{ color: C.textPrimary, ...FONT_TABULAR }}>{banked.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span>house edge</span>

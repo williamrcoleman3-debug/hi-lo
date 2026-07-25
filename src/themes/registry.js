@@ -48,14 +48,17 @@ const tokens = {
   // heart/diamond never reads as an alert.
   cardRedInk: "#B8464C",
 
-  // The 5 call buttons each keep a distinct identity color (unchanged from
-  // before), just rendered as solid fills now instead of outlines. None of
-  // these is `win`/`lose` -- see comment above.
-  callLower: "#2DD4BF", // same as accent
-  callSame: "#8B5CF6",
-  callHigher: "#F59E0B", // same as caution
-  callRed: "#B8464C", // same as cardRedInk
-  callBlack: "#E7EAF0",
+  // The 5 call buttons each keep a distinct identity color, rendered as
+  // solid fills. Same and Red are now the exact same hex as `win`/`lose`
+  // respectively -- a deliberate choice (confirmed explicitly), not an
+  // oversight; the earlier "never reuse the outcome colors on a button"
+  // rule is intentionally relaxed here.
+  callLower: "#F97316",
+  callSame: "#22C55E", // same as win
+  callHigher: "#A855F7",
+  callRed: "#EF4444", // same as lose
+  callBlack: "#111111",
+  callBlackBorder: "#2C2C2A",
 };
 
 export const THEMES = [

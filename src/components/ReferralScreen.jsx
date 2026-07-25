@@ -22,7 +22,7 @@ export function ReferralScreen({ userId, profile }) {
       <div className="w-full max-w-4xl mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Referrals</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
-          Earn 5 lifelines when a friend signs up with your link and plays their first game — win or bust, either
+          Earn 10 lifelines when a friend signs up with your link and plays their first game — win or bust, either
           counts.
         </p>
       </div>

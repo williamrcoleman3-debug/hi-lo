@@ -49,17 +49,17 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
                 New account bonus
               </div>
               <p className="text-xs" style={{ color: C.textMuted }}>
-                Every account starts with 1 free lifeline, automatically.
+                Every account starts with 10 free lifelines, automatically.
               </p>
             </div>
 
             <div className="rounded-lg p-4" style={{ border: `1px solid ${C.border}` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>
-                Refer a friend — +5
+                Refer a friend — +10
               </div>
               <p className="text-xs mb-2" style={{ color: C.textMuted }}>
                 Share your invite link. As soon as a friend signs up with it and plays their first game — win or
-                bust, either counts — you get 5 lifelines.
+                bust, either counts — you get 10 lifelines.
               </p>
               {onViewReferrals && (
                 <button onClick={onViewReferrals} className="text-xs underline" style={{ color: C.accent }}>

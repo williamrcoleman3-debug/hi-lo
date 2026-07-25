@@ -77,7 +77,17 @@
 --                             enforced, and referrer_engagement further
 --                             down for a way to manually spot-check it.
 --   lifeline_balance        — spendable "Save the Game" lifeline count.
---                             New accounts start with 1, free.
+--                             New accounts start with 10, free.
+--   is_admin                — manually-set admin flag, same pattern as
+--                             is_contest_banned above (set directly via SQL,
+--                             no detection logic or admin UI). Exempts the
+--                             account from the daily play limit (see
+--                             check_daily_play_limit() below) entirely.
+--                             Deliberately NOT wired into anything else
+--                             (leaderboard display, lifelines, etc.) --
+--                             contest-winner eligibility for admin accounts
+--                             is enforced manually during the review
+--                             process, not in code.
 --   spendable_tokens        — a SEPARATE pooled balance from
 --                             leaderboard_scores.cumulative_banked (which
 --                             must never decrease — it's the permanent
@@ -108,13 +118,14 @@ create table public.profiles (
   last_banked_date date,
   equipped_theme text not null default 'classic',
   is_contest_banned boolean not null default false,
+  is_admin boolean not null default false,
   referred_by uuid references public.profiles (id),
   has_banked_ever boolean not null default false,
   has_played_ever boolean not null default false,
   referral_reward_granted boolean not null default false,
   referred_signups_count integer not null default 0,
   qualified_referral_count integer not null default 0,
-  lifeline_balance integer not null default 1,
+  lifeline_balance integer not null default 10,
   spendable_tokens bigint not null default 0,
   created_at timestamptz not null default now()
 );
@@ -1138,6 +1149,10 @@ revoke all on public.daily_game_starts from anon, authenticated;
 -- check_rate_limit(); a fresh game_sessions row isn't inserted if this
 -- raises. Resets at UTC midnight since it keys on the server's own
 -- calendar date, never a client-reported one.
+--
+-- is_admin accounts are exempt entirely -- unlimited games per day, and no
+-- daily_game_starts row is written for them either, so there's nothing to
+-- later "unblock."
 create or replace function public.check_daily_play_limit() returns void
 language plpgsql
 security definer
@@ -1147,7 +1162,13 @@ declare
   v_daily_limit constant int := 101;
   v_today date := (now() at time zone 'utc')::date;
   v_count int;
+  v_is_admin boolean;
 begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if coalesce(v_is_admin, false) then
+    return;
+  end if;
+
   insert into public.daily_game_starts (user_id, start_date, games_started)
   values (auth.uid(), v_today, 1)
   on conflict (user_id, start_date) do update set
@@ -1692,7 +1713,7 @@ begin
     if v_referred_by is not null and not coalesce(v_reward_granted, false) then
       update public.profiles set referral_reward_granted = true where id = v_session.user_id;
       update public.profiles
-         set lifeline_balance = lifeline_balance + 5,
+         set lifeline_balance = lifeline_balance + 10,
              qualified_referral_count = qualified_referral_count + 1
        where id = v_referred_by;
     end if;

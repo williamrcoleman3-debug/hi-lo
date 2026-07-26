@@ -59,6 +59,22 @@ const tokens = {
   callRed: "#EF4444", // same as lose
   callBlack: "#111111",
   callBlackBorder: "#2C2C2A",
+
+  // Blackjack's 4 action buttons -- solid fills, each with its own dark
+  // text for contrast (unrelated to Hi-Lo's call buttons above, own
+  // distinct palette per the Blackjack spec).
+  bjHit: "#2DD4BF",
+  bjHitInk: "#00272E",
+  bjStand: "#378ADD",
+  bjStandInk: "#042C53",
+  bjSplit: "#7F77DD",
+  bjSplitInk: "#26215C",
+  bjDouble: "#EF9F27",
+  bjDoubleInk: "#412402",
+
+  // The new Hi-Lo logo mark (crosshair) -- card backs only for now, see
+  // Card.jsx.
+  cardBackMark: "#2DD4BF",
 };
 
 export const THEMES = [

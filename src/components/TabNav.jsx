@@ -7,6 +7,7 @@ const LEADERBOARD_TAB = { id: "leaderboard", label: "Leaderboard" };
 // Everything besides Game/Leaderboard always collapses into "More" -- new
 // tabs should default in here rather than growing the primary row.
 const BASE_OVERFLOW_TABS = [
+  { id: "blackjack", label: "Blackjack" },
   { id: "unlocks", label: "Unlocks" },
   { id: "stats", label: "Stats" },
   { id: "referrals", label: "Referrals" },

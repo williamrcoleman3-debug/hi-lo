@@ -6,13 +6,28 @@ const PAGES = [
   {
     title: "🏆 $25,000 Prize Contest",
     body: (C) => (
-      <ul className="flex flex-col gap-2 text-sm" style={{ color: C.textSecondary }}>
-        <li>There's a real $25,000 prize on the line.</li>
-        <li>Make 51 correct calls in a row and it's yours.</li>
-        <li>If nobody clears it by March 31, 2027, the winner will be whoever holds the highest Win Streak at that point.</li>
-        <li>No purchase necessary. Free to play, free to win.</li>
-        <li>Must be 18+ and located in the United States. Void in New York and Rhode Island.</li>
-      </ul>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm" style={{ color: C.textSecondary }}>
+          There's a real <strong style={{ color: C.accent }}>$25,000</strong> prize on the line.
+        </p>
+
+        <div className="rounded-lg p-4 flex flex-col gap-2" style={{ border: `1px solid ${C.accent}`, background: C.accentSoft }}>
+          <p className="text-sm" style={{ color: C.textPrimary }}>
+            Make <strong style={{ color: C.accent }}>51 correct calls in a row</strong> and it's yours.
+          </p>
+          <p className="text-sm" style={{ color: C.textPrimary }}>
+            If nobody clears it by <strong style={{ color: C.accent }}>March 31, 2027</strong>, the winner will be whoever holds the highest Win Streak at that point.
+          </p>
+        </div>
+
+        <p className="text-sm" style={{ color: C.textSecondary }}>
+          No purchase necessary. Free to play, free to win.
+        </p>
+
+        <p className="text-xs" style={{ color: C.textMuted }}>
+          Must be 18+ and located in the United States. Void in New York and Rhode Island.
+        </p>
+      </div>
     ),
   },
   {
@@ -60,7 +75,7 @@ export function SignedOutTutorialOverlay({ messages }) {
   const current = PAGES[page];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(11,14,20,0.94)" }}>
       <div
         className="w-full max-w-lg rounded-lg p-6 max-h-[90vh] overflow-y-auto"
         style={{ background: C.panel, border: `1px solid ${C.border}` }}

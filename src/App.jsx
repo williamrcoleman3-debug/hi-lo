@@ -10,6 +10,7 @@ import { AuthWidget } from "./components/AuthWidget";
 import { SiteBanner } from "./components/SiteBanner";
 import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay";
 import { GameScreen } from "./components/GameScreen";
+import { Footer } from "./components/Footer";
 
 // Every tab besides Game is code-split -- its chunk is only fetched the
 // first time a visitor actually opens that tab, not bundled into the
@@ -27,6 +28,12 @@ const LifelinesScreen = lazy(() =>
 );
 const RulesScreen = lazy(() => import("./components/RulesScreen").then((m) => ({ default: m.RulesScreen })));
 const FairnessScreen = lazy(() => import("./components/FairnessScreen").then((m) => ({ default: m.FairnessScreen })));
+const ContestRulesScreen = lazy(() =>
+  import("./components/ContestRulesScreen").then((m) => ({ default: m.ContestRulesScreen }))
+);
+const PrivacyPolicyScreen = lazy(() =>
+  import("./components/PrivacyPolicyScreen").then((m) => ({ default: m.PrivacyPolicyScreen }))
+);
 const FeedbackScreen = lazy(() => import("./components/FeedbackScreen").then((m) => ({ default: m.FeedbackScreen })));
 
 function TabLoadingFallback() {
@@ -131,7 +138,9 @@ function AppShell({
       {userId ? (
         <SiteBanner messages={messages} />
       ) : (
-        sessionChecked && <SignedOutTutorialOverlay messages={messages} />
+        sessionChecked && (
+          <SignedOutTutorialOverlay messages={messages} onViewContestRules={() => goToTab("contest-rules")} />
+        )
       )}
       {/* Game stays eager (it's the landing experience for every visitor).
           Every other tab below only mounts once opened (see openedTabs
@@ -200,12 +209,25 @@ function AppShell({
         )}
         {openedTabs.has("rules") && (
           <div className="w-full flex flex-col items-center" style={{ display: tab === "rules" ? "flex" : "none" }}>
-            <RulesScreen />
+            <RulesScreen onViewContestRules={() => goToTab("contest-rules")} />
           </div>
         )}
         {openedTabs.has("fairness") && (
           <div className="w-full flex flex-col items-center" style={{ display: tab === "fairness" ? "flex" : "none" }}>
             <FairnessScreen />
+          </div>
+        )}
+        {openedTabs.has("contest-rules") && (
+          <div
+            className="w-full flex flex-col items-center"
+            style={{ display: tab === "contest-rules" ? "flex" : "none" }}
+          >
+            <ContestRulesScreen />
+          </div>
+        )}
+        {openedTabs.has("privacy") && (
+          <div className="w-full flex flex-col items-center" style={{ display: tab === "privacy" ? "flex" : "none" }}>
+            <PrivacyPolicyScreen />
           </div>
         )}
         {openedTabs.has("feedback") && (
@@ -214,6 +236,7 @@ function AppShell({
           </div>
         )}
       </Suspense>
+      <Footer onViewContestRules={() => goToTab("contest-rules")} onViewPrivacyPolicy={() => goToTab("privacy")} />
     </div>
   );
 }

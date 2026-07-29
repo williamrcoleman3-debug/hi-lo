@@ -14,6 +14,8 @@ const BASE_OVERFLOW_TABS = [
   { id: "lifelines", label: "Lifelines" },
   { id: "rules", label: "Rules" },
   { id: "fairness", label: "Fairness" },
+  { id: "contest-rules", label: "Contest Rules" },
+  { id: "privacy", label: "Privacy" },
   { id: "feedback", label: "Feedback" },
 ];
 

@@ -32,12 +32,21 @@ const PAGES = [
   },
   {
     title: "🃏 How The Game Works",
-    body: (C) => (
-      <ul className="flex flex-col gap-2 text-sm" style={{ color: C.textSecondary }}>
-        <li>It's an easy game. You're dealt a card, then you pick the next one, higher, lower, the same, red, or black.</li>
-        <li>You're allowed two lifelines per game. A lifeline will let you extend your streak if you pick incorrectly.</li>
-        <li>You get 100 games a day. Good luck.</li>
-      </ul>
+    body: (C, onViewContestRules) => (
+      <div className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-2 text-sm" style={{ color: C.textSecondary }}>
+          <li>It's an easy game. You're dealt a card, then you pick the next one, higher, lower, the same, red, or black.</li>
+          <li>You're allowed two lifelines per game. A lifeline will let you extend your streak if you pick incorrectly.</li>
+          <li>You get 100 games a day. Good luck.</li>
+        </ul>
+        <button
+          onClick={onViewContestRules}
+          className="text-xs text-left underline underline-offset-2"
+          style={{ color: C.textMuted }}
+        >
+          Read the full Official Contest Rules
+        </button>
+      </div>
     ),
   },
 ];
@@ -58,7 +67,7 @@ const PAGES = [
 // -- bump its updated_at (e.g. a trivial `update ... set updated_at =
 // now()`) after any future wording change here to force it back in front
 // of everyone who already dismissed the old version.
-export function SignedOutTutorialOverlay({ messages }) {
+export function SignedOutTutorialOverlay({ messages, onViewContestRules }) {
   const C = useThemeTokens();
   const [page, setPage] = useState(0);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
@@ -69,6 +78,11 @@ export function SignedOutTutorialOverlay({ messages }) {
   const handleDismiss = () => {
     dismiss("banner_signed_out", updatedAt);
     setDismissedThisSession(true);
+  };
+
+  const handleViewContestRules = () => {
+    handleDismiss();
+    onViewContestRules();
   };
 
   const isLastPage = page === PAGES.length - 1;
@@ -89,7 +103,7 @@ export function SignedOutTutorialOverlay({ messages }) {
           </button>
         </div>
 
-        {current.body(C)}
+        {current.body(C, handleViewContestRules)}
 
         <div className="flex items-center justify-between mt-6">
           <div className="flex gap-1.5">

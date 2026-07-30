@@ -1,6 +1,6 @@
 import { useThemeTokens } from "../themes/ThemeContext";
 
-export function RulesScreen() {
+export function RulesScreen({ onViewContestRules }) {
   const C = useThemeTokens();
   return (
     <div className="w-full flex flex-col items-center">
@@ -13,7 +13,11 @@ export function RulesScreen() {
         style={{ border: `1px solid ${C.caution}`, background: C.cautionSoft, color: C.textSecondary }}
       >
         Draft — pending attorney review. Nothing on this page is final legal contest terms; it covers
-        fraud-enforcement, anti-bot, and manual-review policy only.
+        fraud-enforcement, anti-bot, and manual-review policy only. See the full{" "}
+        <button onClick={onViewContestRules} className="underline underline-offset-2" style={{ color: C.textSecondary }}>
+          Official Contest Rules
+        </button>{" "}
+        for entry, eligibility, and prize terms.
       </div>
 
       <div

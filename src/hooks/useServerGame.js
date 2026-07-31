@@ -3,6 +3,7 @@ import { getActiveProbs, growthFor, TIMER_MS, AUTO_ADVANCE_MS, DEFAULT_PRICING_M
 import { MAX_LIFELINES_PER_GAME } from "../lifelines/lifelines.js";
 import { startGame, makeServerCall, useLifelineInSession, bustSession, bankSession } from "../session/gameSession.js";
 import { playClickTone, playWinTone, playLoseTone } from "../audio/sound.js";
+import { hapticTap, hapticWin, hapticBust } from "../haptics/haptics.js";
 
 const FLASH_MS = 180;
 const SHAKE_MS = 180;
@@ -169,6 +170,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
       setShake(true);
       setTimeout(() => setShake(false), SHAKE_MS);
       playLoseTone();
+      hapticBust();
       finishGame(bustSession, false, finalBanked);
     },
     [fireFlash, finishGame]
@@ -210,6 +212,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
       if (status !== "playing" || revealing || awaitingAdvance || !sessionId) return;
 
       playClickTone();
+      hapticTap();
       setRevealing(true);
 
       (async () => {
@@ -231,6 +234,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
             spawnToast(`+${result.gain.toLocaleString()}`);
             fireFlash("win");
             playWinTone();
+            hapticWin();
 
             if (result.status === "cashed") {
               // The server already auto-finalized this session as a win --

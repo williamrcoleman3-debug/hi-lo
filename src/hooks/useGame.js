@@ -13,6 +13,7 @@ import {
 } from "../engine";
 import { MAX_LIFELINES_PER_GAME } from "../lifelines/lifelines.js";
 import { playClickTone, playWinTone, playLoseTone } from "../audio/sound.js";
+import { hapticTap, hapticWin, hapticBust } from "../haptics/haptics.js";
 
 const FLASH_MS = 180;
 const SHAKE_MS = 180;
@@ -120,6 +121,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
       setShake(true);
       setTimeout(() => setShake(false), SHAKE_MS);
       playLoseTone();
+      hapticBust();
       if (banked > 0) onGameEnd?.(deckConfig.id, { amount: banked, wasBanked: false });
     },
     [fireFlash, banked, deckConfig, onGameEnd]
@@ -198,6 +200,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
 
       clearInterval(intervalRef.current);
       playClickTone();
+      hapticTap();
       setRevealing(true);
       setRevealedCard(drawn);
       setDeck(rest);
@@ -217,6 +220,7 @@ export function useGame(deckConfig, { onCorrectCall, onGameEnd, lifelineBalance 
         spawnToast(`+${gain.toLocaleString()}`);
         fireFlash("win");
         playWinTone();
+        hapticWin();
         onCorrectCall?.(deckConfig.id, call, { winStreak: newWinStreak, trueProbs });
 
         const bankingDisabled = lifelinesUsedThisGame > 0 || speedModeRef.current;

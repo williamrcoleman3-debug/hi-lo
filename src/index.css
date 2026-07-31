@@ -6,6 +6,57 @@ body {
   margin: 0;
 }
 
+/* App-shell (not "browser tab") feel -- these four apply everywhere
+   (including the plain hi-lo-game.com website), since none of them remove
+   any capability a web visitor would actually use: tap-highlight-color and
+   touch-action:manipulation only affect the flash/double-tap-zoom timing on
+   touch input, overscroll-behavior only suppresses the bounce/pull-to-
+   refresh gesture, and the background match just avoids a color mismatch
+   during that bounce on devices where it still shows through. */
+html,
+body {
+  background: #0B0E14;
+  overscroll-behavior: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  touch-action: manipulation;
+}
+
+/* Long-press callout/text-selection suppression, by contrast, DOES remove a
+   capability (copy/paste) -- fine to lose inside the native app shell, but
+   not for ordinary visitors reading e.g. the Contest Rules or Privacy
+   Policy on the actual website. Scoped to .capacitor-native, a class only
+   ever added when running inside Capacitor (see src/native/bootstrap.js). */
+.capacitor-native body {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.capacitor-native input,
+.capacitor-native textarea {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Keeps nav/buttons clear of the notch and home-indicator bar -- paired
+   with StatusBar.overlaysWebView: true (see src/native/bootstrap.js), which
+   draws this app's own dark background under the status bar instead of a
+   separate native strip. viewport-fit=cover in index.html is required for
+   these env() values to report anything other than 0. */
+.app-safe-area {
+  padding-top: max(2rem, calc(2rem + env(safe-area-inset-top)));
+  padding-bottom: max(2rem, calc(2rem + env(safe-area-inset-bottom)));
+  padding-left: max(1rem, calc(1rem + env(safe-area-inset-left)));
+  padding-right: max(1rem, calc(1rem + env(safe-area-inset-right)));
+}
+
 @keyframes cardPop {
   0% { transform: scale(0.85); opacity: 0.3; }
   60% { transform: scale(1.04); opacity: 1; }

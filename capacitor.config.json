@@ -1,0 +1,24 @@
+{
+  "appId": "com.halifaxwaterco.hilo",
+  "appName": "Hi-Lo by Bang Gaming",
+  "webDir": "dist",
+  "server": {
+    "url": "https://hi-lo-game.com",
+    "cleartext": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": false,
+      "backgroundColor": "#0B0E14",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP",
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "overlaysWebView": true
+    }
+  }
+}

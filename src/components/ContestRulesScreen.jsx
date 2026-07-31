@@ -52,7 +52,7 @@ export function ContestRulesScreen() {
       <Section title="1. Sponsor">
         <p>
           Halifax Water Co., DBA Hi-Lo-Stakes (fictitious name registration confirmed complete and filed with the
-          state). [Add business address once ready to publish.] Referred to as "Hi-Lo-Stakes" throughout these rules.
+          state). 444 Nautilus Ave, Daytona Beach, FL 32118. Referred to as "Hi-Lo-Stakes" throughout these rules.
         </p>
       </Section>
 
@@ -62,7 +62,7 @@ export function ContestRulesScreen() {
 
       <Section title="2. Contest Period">
         <p>
-          Begins [TBD — start date, to be confirmed] and ends March 31, 2027 at 11:59 PM ET ("Contest Period"),
+          Begins August 24, 2026 and ends March 31, 2027 at 11:59 PM ET ("Contest Period"),
           unless claimed earlier per Section 5. If unclaimed by the end of the Contest Period, a new contest period
           may begin thereafter under separate rules.
         </p>
@@ -222,6 +222,16 @@ export function ContestRulesScreen() {
 
       <Section title="10. Governing Law">
         <p>Florida.</p>
+      </Section>
+
+      <Section title="10A. Dispute Resolution / Arbitration">
+        <p>
+          Any dispute arising out of or relating to this contest, these rules, or participation in Hi-Lo, will be
+          resolved by binding arbitration administered by the American Arbitration Association (AAA) under its
+          applicable rules, with the arbitration seated in Duval County, Florida. A participant may opt out of this
+          arbitration agreement by providing written notice to Hi-Lo-Stakes within 30 days of first entering the
+          contest; opting out does not affect eligibility to participate.
+        </p>
       </Section>
 
       <Section title="11. Publicity / Winner Anonymity">

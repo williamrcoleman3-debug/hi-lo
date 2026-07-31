@@ -6,10 +6,13 @@ body {
   margin: 0;
 }
 
-/* App-shell (not "browser tab") feel for the Capacitor-wrapped iOS build --
-   harmless no-ops on regular desktop/mobile web, since none of these
-   properties do anything without touch input or a WKWebView bounce/zoom to
-   suppress in the first place. */
+/* App-shell (not "browser tab") feel -- these four apply everywhere
+   (including the plain hi-lo-game.com website), since none of them remove
+   any capability a web visitor would actually use: tap-highlight-color and
+   touch-action:manipulation only affect the flash/double-tap-zoom timing on
+   touch input, overscroll-behavior only suppresses the bounce/pull-to-
+   refresh gesture, and the background match just avoids a color mismatch
+   during that bounce on devices where it still shows through. */
 html,
 body {
   background: #0B0E14;
@@ -21,14 +24,22 @@ body {
 }
 
 body {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
   touch-action: manipulation;
 }
 
-input,
-textarea {
+/* Long-press callout/text-selection suppression, by contrast, DOES remove a
+   capability (copy/paste) -- fine to lose inside the native app shell, but
+   not for ordinary visitors reading e.g. the Contest Rules or Privacy
+   Policy on the actual website. Scoped to .capacitor-native, a class only
+   ever added when running inside Capacitor (see src/native/bootstrap.js). */
+.capacitor-native body {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.capacitor-native input,
+.capacitor-native textarea {
   -webkit-touch-callout: default;
   -webkit-user-select: text;
   user-select: text;

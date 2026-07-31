@@ -35,7 +35,6 @@ export function GameScreenView({
   toasts,
   timeLeft,
   probs,
-  growths,
   lifelinesUsedThisGame,
   sessionSpeedMode,
   history,
@@ -237,7 +236,7 @@ export function GameScreenView({
                 >
                   Lower
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
-                    {probs.pLower > 0 ? `${Math.round(probs.pLower * 100)}% · ×${growths.lower.toFixed(2)}` : "—"}
+                    {probs.pLower > 0 ? `${Math.round(probs.pLower * 100)}%` : "—"}
                   </div>
                 </button>
                 <button
@@ -248,7 +247,7 @@ export function GameScreenView({
                 >
                   Same
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
-                    {probs.pSame > 0 ? `${Math.round(probs.pSame * 100)}% · ×${growths.same.toFixed(2)}` : "—"}
+                    {probs.pSame > 0 ? `${Math.round(probs.pSame * 100)}%` : "—"}
                   </div>
                 </button>
                 <button
@@ -259,7 +258,7 @@ export function GameScreenView({
                 >
                   Higher
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
-                    {probs.pHigher > 0 ? `${Math.round(probs.pHigher * 100)}% · ×${growths.higher.toFixed(2)}` : "—"}
+                    {probs.pHigher > 0 ? `${Math.round(probs.pHigher * 100)}%` : "—"}
                   </div>
                 </button>
               </div>
@@ -275,7 +274,7 @@ export function GameScreenView({
                 >
                   Red
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
-                    {probs.pRed > 0 ? `${Math.round(probs.pRed * 100)}% · ×${growths.red.toFixed(2)}` : "—"}
+                    {probs.pRed > 0 ? `${Math.round(probs.pRed * 100)}%` : "—"}
                   </div>
                 </button>
                 <button
@@ -286,7 +285,7 @@ export function GameScreenView({
                 >
                   Black
                   <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
-                    {probs.pBlack > 0 ? `${Math.round(probs.pBlack * 100)}% · ×${growths.black.toFixed(2)}` : "—"}
+                    {probs.pBlack > 0 ? `${Math.round(probs.pBlack * 100)}%` : "—"}
                   </div>
                 </button>
               </div>

@@ -25,14 +25,6 @@ export function ContestRulesScreen() {
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Official Contest Rules</h1>
       </div>
 
-      <div
-        className="w-full max-w-4xl rounded-lg px-4 py-3 mb-6 text-xs"
-        style={{ border: `1px solid ${C.caution}`, background: C.cautionSoft, color: C.textSecondary }}
-      >
-        Draft — pending attorney review. Items in brackets are unresolved and not yet finalized. This page will be
-        updated once final legal review is complete.
-      </div>
-
       <Section>
         <p>
           <strong style={{ color: C.textPrimary }}>NO PURCHASE NECESSARY TO ENTER OR WIN.</strong> Tokens have no

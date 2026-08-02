@@ -209,7 +209,7 @@ function AppShell({
         )}
         {openedTabs.has("rules") && (
           <div className="w-full flex flex-col items-center" style={{ display: tab === "rules" ? "flex" : "none" }}>
-            <RulesScreen onViewContestRules={() => goToTab("contest-rules")} />
+            <RulesScreen />
           </div>
         )}
         {openedTabs.has("fairness") && (

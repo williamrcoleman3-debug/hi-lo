@@ -90,6 +90,7 @@ function SignedInGameScreen(props) {
   const game = useServerGame(selectedDeckConfig, {
     lifelineBalance: profile?.lifeline_balance ?? 0,
     speedMode: gameMode === "speed",
+    onLifelineUsed: refreshProfile,
     onGameEnd: (_deckId, { wasBanked, isNewPeak: newPeak }) => {
       setIsNewPeak(newPeak);
       // A Bank may have just advanced the daily streak / lifeline reward

@@ -60,7 +60,7 @@ export function UsernameField({ value, onChange, checkUsernameAvailable, current
         pattern="[A-Za-z]{2,16}"
         required
         autoFocus={autoFocus}
-        className="rounded-lg px-3 py-2 text-sm"
+        className="rounded-lg px-3 py-2 text-base"
         style={inputStyle}
       />
       <span className="text-xs" style={{ color: status === "taken" ? C.lose : C.textMuted }}>

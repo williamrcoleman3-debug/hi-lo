@@ -34,7 +34,7 @@ const WIN_POP_MS = 180;
 // no secret to protect and no need to round-trip to the server just to
 // show a number. The server independently recomputes the same formula
 // when it actually resolves a call, rather than trusting anything sent to it.
-export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, speedMode = false } = {}) {
+export function useServerGame(deckConfig, { onGameEnd, onLifelineUsed, lifelineBalance = 0, speedMode = false } = {}) {
   const [sessionId, setSessionId] = useState(null);
   const [compareCard, setCompareCard] = useState(null);
   const [revealedCard, setRevealedCard] = useState(null);
@@ -302,6 +302,13 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
         setPendingBustCard(null);
         setStatus("playing");
         setMessage("Call it before the clock runs out.");
+        // The account's lifeline_balance just changed server-side -- the
+        // RPC response above even carries the new value, but this hook has
+        // no access to (and shouldn't own) the profile that balance lives
+        // on. Same "server-side profile field changed non-locally" case
+        // onGameEnd's wasBanked branch already handles by telling the
+        // caller to refresh; this is that same signal for lifeline use.
+        onLifelineUsed?.();
       } else {
         const card = pendingBustCard;
         setPendingBustCard(null);
@@ -313,7 +320,7 @@ export function useServerGame(deckConfig, { onGameEnd, lifelineBalance = 0, spee
       setPendingBustCard(null);
       resolveBust(`Busted on ${card.rank.key}${card.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`, banked);
     }
-  }, [status, pendingBustCard, sessionId, banked, resolveBust]);
+  }, [status, pendingBustCard, sessionId, banked, resolveBust, onLifelineUsed]);
 
   const declineLifeline = useCallback(() => {
     if (status !== "lifeline-offer" || !pendingBustCard) return;

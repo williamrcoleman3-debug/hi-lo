@@ -193,7 +193,7 @@ export function AuthWidget() {
               placeholder="you@example.com"
               required
               autoFocus
-              className="rounded-lg px-3 py-2 text-sm"
+              className="rounded-lg px-3 py-2 text-base"
               style={inputStyle}
             />
             <button
@@ -217,7 +217,7 @@ export function AuthWidget() {
               placeholder="6-digit code"
               required
               autoFocus
-              className="rounded-lg px-3 py-2 text-sm"
+              className="rounded-lg px-3 py-2 text-base"
               style={inputStyle}
             />
             <button

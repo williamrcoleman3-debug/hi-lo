@@ -68,7 +68,7 @@ export function FeedbackScreen({ userId }) {
             maxLength={2000}
             rows={6}
             placeholder={type === "bug" ? "What happened? What did you expect instead?" : "What should we add or change?"}
-            className="w-full rounded-lg p-4 text-sm resize-none"
+            className="w-full rounded-lg p-4 text-base resize-none"
             style={{ border: `1px solid ${C.border}`, background: "transparent", color: C.textPrimary }}
           />
 

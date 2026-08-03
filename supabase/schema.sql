@@ -1943,3 +1943,167 @@ as $$
 $$;
 
 revoke all on function public.find_sessions_for_review(text) from public, anon, authenticated;
+
+-- ============================================================================
+-- REMOVE ADS + AD SYSTEM
+--
+-- Non-consumable IAP (com.halifaxwaterco.hilo.removeads, $4.99) that only
+-- ever toggles whether interstitial ads show -- it has no effect on
+-- gameplay, odds, the deck, or the 101-games/day limit enforced above.
+-- Everything in this section is deliberately kept separate from
+-- start_game/make_call/bank_session/bust_session and the deck/odds
+-- helpers -- the two new RPCs below only ever touch profiles' own
+-- ad-related columns, nothing in game_sessions.
+--
+-- Written entirely with `if not exists`/`create or replace`, like the
+-- rest of this file, so this whole section is safe to paste into the SQL
+-- editor once against the already-live database, not just a fresh one.
+--
+-- SECURITY NOTE: profiles' existing "users can update their own profile"
+-- RLS policy (near the top of this file) is row-scoped, not
+-- column-scoped -- without the column-level REVOKE below, a signed-in
+-- client could set ads_disabled = true on themselves directly via a plain
+-- client-side update, bypassing the $4.99 purchase entirely. The REVOKE
+-- closes that specifically for the three server-owned columns added here
+-- and changes nothing about any existing column's behavior.
+-- ============================================================================
+
+alter table public.profiles add column if not exists ads_disabled boolean not null default false;
+alter table public.profiles add column if not exists last_ad_shown_at timestamptz;
+alter table public.profiles add column if not exists hands_since_last_ad integer not null default 0;
+-- Preference, not server-owned state -- same "direct client update, no
+-- RPC" pattern as equipped_theme. Reappears automatically after a refund
+-- because app-store-notifications (the ASSN v2 webhook, see
+-- supabase/functions/app-store-notifications) resets this to false
+-- whenever it flips ads_disabled back to false.
+alter table public.profiles add column if not exists remove_ads_banner_dismissed boolean not null default false;
+
+revoke update (ads_disabled, last_ad_shown_at, hands_since_last_ad) on public.profiles from authenticated, anon;
+
+-- iap_transactions: one row per StoreKit transaction ever seen for this
+-- product, keyed for idempotency on Apple's own stable
+-- original_transaction_id -- the same id a refund notification carries,
+-- which is how app-store-notifications below finds the right user
+-- without trusting anything client-supplied. status starts 'pending' the
+-- moment a client's first verification attempt is made and only ever
+-- moves forward to 'verified' or 'refunded', never back to 'pending' --
+-- so the client's "still confirming" UI state only ever reflects a real
+-- in-flight verification.
+--
+-- No insert/update policy for any client role -- rows are only ever
+-- written by the two Edge Functions (verify-iap-receipt,
+-- app-store-notifications), both running with the service role key,
+-- which bypasses RLS entirely. The one select policy below exists solely
+-- so the client can poll its own pending purchase for the "Confirming
+-- your purchase..." UI state.
+create table if not exists public.iap_transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  product_id text not null,
+  original_transaction_id text not null,
+  transaction_id text not null,
+  signed_transaction_info text,
+  status text not null default 'pending' check (status in ('pending', 'verified', 'failed', 'refunded')),
+  verification_attempts integer not null default 0,
+  last_attempt_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists iap_transactions_original_transaction_id_idx
+  on public.iap_transactions (original_transaction_id);
+
+alter table public.iap_transactions enable row level security;
+revoke all on public.iap_transactions from anon, authenticated;
+
+create policy "users can read their own iap transactions"
+  on public.iap_transactions for select
+  using (auth.uid() = user_id);
+
+-- Whether to show the pre-game interstitial: false immediately if ads are
+-- disabled (purchased, and not since refunded) or if last_ad_shown_at is
+-- less than 60 minutes old. If eligible, atomically stamps
+-- last_ad_shown_at = now() in the same locked read that decides "yes" --
+-- the `for update` row lock means two concurrent calls (e.g. two tabs)
+-- can't both come back "yes" for the same 60-minute window.
+--
+-- Deliberately its own RPC, not folded into start_game -- keeps ad-gating
+-- entirely outside the deck/session code path that start_game owns. The
+-- client (src/ads/adGate.js#runPregameAdGate) calls this at most once per
+-- app launch, before the first start_game() of that launch.
+create or replace function public.should_show_pregame_ad() returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ads_disabled boolean;
+  v_last_shown timestamptz;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  select ads_disabled, last_ad_shown_at into v_ads_disabled, v_last_shown
+    from public.profiles
+   where id = auth.uid()
+   for update;
+
+  if coalesce(v_ads_disabled, false) then
+    return false;
+  end if;
+
+  if v_last_shown is not null and now() - v_last_shown < interval '60 minutes' then
+    return false;
+  end if;
+
+  update public.profiles set last_ad_shown_at = now() where id = auth.uid();
+  return true;
+end;
+$$;
+
+revoke all on function public.should_show_pregame_ad() from public, anon, authenticated;
+grant execute on function public.should_show_pregame_ad() to authenticated;
+
+-- Whether to show the 30-hand interstitial: increments
+-- hands_since_last_ad on every call (one call per resolved hand, fired
+-- from the client independently of make_call itself -- see
+-- src/ads/adGate.js#runHandAdGate), resetting to 0 and returning true the
+-- moment it reaches 30. Skips entirely (no counter mutation at all) if
+-- ads are disabled, same as should_show_pregame_ad above -- so a
+-- Remove-Ads purchase mid-session doesn't leave a stale near-30 count
+-- waiting to fire once ads are later re-enabled by a refund.
+create or replace function public.record_hand_for_ad_gate() returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ads_disabled boolean;
+  v_count integer;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+
+  select ads_disabled into v_ads_disabled from public.profiles where id = auth.uid() for update;
+  if coalesce(v_ads_disabled, false) then
+    return false;
+  end if;
+
+  update public.profiles
+     set hands_since_last_ad = hands_since_last_ad + 1
+   where id = auth.uid()
+   returning hands_since_last_ad into v_count;
+
+  if v_count >= 30 then
+    update public.profiles set hands_since_last_ad = 0 where id = auth.uid();
+    return true;
+  end if;
+
+  return false;
+end;
+$$;
+
+revoke all on function public.record_hand_for_ad_gate() from public, anon, authenticated;
+grant execute on function public.record_hand_for_ad_gate() to authenticated;

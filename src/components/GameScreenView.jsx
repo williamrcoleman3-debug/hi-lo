@@ -4,6 +4,7 @@ import { HOUSE_EDGE, TIMER_MS, RANKS } from "../engine";
 import { Card } from "./Card";
 import { WinStreakLeaderboardWidget } from "./WinStreakLeaderboardWidget";
 import { DeckSwitcher } from "./DeckSwitcher";
+import { RemoveAdsBanner } from "./RemoveAdsBanner";
 
 // Pure presentational render for the game table -- identical markup for
 // anonymous (local-engine) and signed-in (server-authoritative) play. Every
@@ -19,6 +20,8 @@ export function GameScreenView({
   selectDeck,
   tagline,
   onViewFullLeaderboard,
+  onDismissRemoveAdsBanner,
+  onViewRemoveAds,
   cardsLeft,
   compareCard,
   revealedCard,
@@ -105,6 +108,8 @@ export function GameScreenView({
           </div>
         ))}
       </div>
+
+      {userId && <RemoveAdsBanner profile={profile} onDismiss={onDismissRemoveAdsBanner} onViewRemoveAds={onViewRemoveAds} />}
 
       {/* Header */}
       <div className="w-full max-w-4xl flex items-center justify-between mb-6">

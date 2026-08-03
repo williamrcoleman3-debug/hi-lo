@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { BADGES } from "../badges/registry";
 import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
 import { isMuted, setMuted } from "../audio/sound.js";
+import { purchaseRemoveAds } from "../iap/purchases.js";
+import { hasPendingConfirmation } from "../iap/purchaseQueue.js";
 
 function ComingSoon({ label, C }) {
   return (
@@ -214,6 +217,92 @@ function SoundSection() {
   );
 }
 
+// Purchase state, in priority order: purchased (profile.ads_disabled) >
+// pending (a verification attempt has already failed once and is
+// retrying in the background, see src/iap/purchaseQueue.js) > not
+// purchased. Refunds flip ads_disabled back to false server-side (see
+// netlify/functions/app-store-notifications.mjs), which naturally
+// reopens the buy button here too -- no separate "was refunded" state to
+// track.
+function RemoveAdsSection({ profile }) {
+  const C = useThemeTokens();
+  const [pending, setPending] = useState(() => hasPendingConfirmation());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setPending(hasPendingConfirmation()), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!profile) return null;
+
+  const purchased = profile.ads_disabled;
+  const isNative = Capacitor.isNativePlatform();
+
+  const handleBuy = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await purchaseRemoveAds();
+      setPending(hasPendingConfirmation());
+    } catch (err) {
+      console.error("purchaseRemoveAds failed:", err.message);
+      setError("Couldn't start the purchase — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="w-full max-w-4xl mb-8">
+      <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>
+        Remove Ads
+      </h2>
+      <div className="rounded-lg p-4 flex items-center justify-between gap-4" style={{ border: `1px solid ${C.border}` }}>
+        {purchased ? (
+          <span className="text-sm font-semibold" style={{ color: C.accent }}>
+            ✓ Ads removed — thanks for supporting Hi-Lo.
+          </span>
+        ) : pending ? (
+          <span className="text-sm" style={{ color: C.textMuted }}>
+            Confirming your purchase…
+          </span>
+        ) : (
+          <>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+                Remove all ads — $4.99
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: C.textMuted }}>
+                One-time purchase. Never affects odds, the deck, or the daily play limit.
+              </div>
+              {!isNative && (
+                <div className="text-xs mt-0.5" style={{ color: C.textMuted }}>
+                  Available in the iOS app.
+                </div>
+              )}
+              {error && (
+                <div className="text-xs mt-0.5" style={{ color: C.lose }}>
+                  {error}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleBuy}
+              disabled={busy || !isNative}
+              className="rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-50 transition-transform active:scale-95"
+              style={{ background: C.accent, color: C.cardInk }}
+            >
+              {busy ? "…" : "Buy $4.99"}
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function UnlocksScreen({
   profile,
   checkUsernameAvailable,
@@ -241,6 +330,8 @@ export function UnlocksScreen({
       />
 
       <GameModeSection gameMode={gameMode} setGameMode={setGameMode} />
+
+      <RemoveAdsSection profile={profile} />
 
       <SoundSection />
 

@@ -62,3 +62,20 @@ export async function bankSession(sessionId) {
   if (error) throw error;
   return { isNewPeak: data?.[0]?.is_new_peak ?? false };
 }
+
+// Ad-gate RPCs (see supabase/schema.sql's "REMOVE ADS + AD SYSTEM"
+// section) -- entirely separate from the session RPCs above, they only
+// ever touch profiles' own ad-related columns, never game_sessions or the
+// deck. Both fail open on error at the call site (see src/ads/adGate.js),
+// never here.
+export async function shouldShowPregameAd() {
+  const { data, error } = await supabase.rpc("should_show_pregame_ad");
+  if (error) throw error;
+  return data === true;
+}
+
+export async function recordHandForAdGate() {
+  const { data, error } = await supabase.rpc("record_hand_for_ad_gate");
+  if (error) throw error;
+  return data === true;
+}

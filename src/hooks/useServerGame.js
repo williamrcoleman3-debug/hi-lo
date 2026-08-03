@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveProbs, growthFor, TIMER_MS, AUTO_ADVANCE_MS, DEFAULT_PRICING_MODE } from "../engine";
 import { MAX_LIFELINES_PER_GAME } from "../lifelines/lifelines.js";
-import { startGame, makeServerCall, useLifelineInSession, bustSession, bankSession } from "../session/gameSession.js";
+import {
+  startGame,
+  makeServerCall,
+  useLifelineInSession,
+  bustSession,
+  bankSession,
+  shouldShowPregameAd,
+  recordHandForAdGate,
+} from "../session/gameSession.js";
 import { playClickTone, playWinTone, playLoseTone } from "../audio/sound.js";
 import { hapticTap, hapticWin, hapticBust } from "../haptics/haptics.js";
+import { runPregameAdGate, runHandAdGate } from "../ads/adGate.js";
+import { showInterstitial } from "../ads/admob.js";
 
 const FLASH_MS = 180;
 const SHAKE_MS = 180;
@@ -96,6 +106,15 @@ export function useServerGame(deckConfig, { onGameEnd, onLifelineUsed, lifelineB
     setStatus("loading");
     setMessage("Dealing…");
     try {
+      // No-ops after the first call of this app launch (see adGate.js) --
+      // safe to call before every game, not just the very first one.
+      // Fails open on any error/timeout/offline device, never blocks
+      // dealing.
+      await runPregameAdGate({
+        checkPregameAd: shouldShowPregameAd,
+        showInterstitial: () => showInterstitial("pregame"),
+      });
+
       // Captured once per game, not read live -- see the header comment on
       // why this can't just reference the `speedMode` prop directly inside
       // makeCall below.
@@ -280,6 +299,17 @@ export function useServerGame(deckConfig, { onGameEnd, onLifelineUsed, lifelineB
             // rather than showing an offer the player can't act on.
             resolveBust(`Busted on ${result.drawnCard.rank.key}${result.drawnCard.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`, banked);
           }
+
+          // This hand's own outcome is already fully reflected in state
+          // above -- this only gates the NEXT hand starting (`revealing`
+          // is what actually blocks input), matching "show an ad before
+          // the next hand starts," not "delay revealing this one." Fails
+          // open on any error/timeout/offline device.
+          await runHandAdGate({
+            recordHandForAdGate,
+            showInterstitial: () => showInterstitial("thirtyHand"),
+          });
+
           setRevealing(false);
         } catch (err) {
           console.error("makeCall failed:", err.message);

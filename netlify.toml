@@ -1,0 +1,10 @@
+# Only declares where Netlify Functions live -- deliberately no [build]
+# section here, so the build command / publish directory already
+# configured in the Netlify dashboard keep working exactly as before.
+# These two functions (verify-iap-receipt, app-store-notifications) exist
+# because Apple's official App Store Server verification library doesn't
+# run correctly on Supabase's Deno-based Edge Functions -- see the Remove
+# Ads implementation notes for why. Everything else in this app stays on
+# Supabase (Postgres RPCs) exactly as before.
+[functions]
+  directory = "netlify/functions"

@@ -11,6 +11,7 @@ import { SiteBanner } from "./components/SiteBanner";
 import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay";
 import { GameScreen } from "./components/GameScreen";
 import { Footer } from "./components/Footer";
+import { initPurchases } from "./iap/purchases.js";
 
 // Every tab besides Game is code-split -- its chunk is only fetched the
 // first time a visitor actually opens that tab, not bundled into the
@@ -56,7 +57,16 @@ export default function App() {
     capturePendingReferral();
   }, []);
 
-  const { user, profile, refreshProfile, sessionChecked, checkUsernameAvailable, updateUsername, updateAvatar } = useAuth();
+  const {
+    user,
+    profile,
+    refreshProfile,
+    sessionChecked,
+    checkUsernameAvailable,
+    updateUsername,
+    updateAvatar,
+    dismissRemoveAdsBanner,
+  } = useAuth();
   const userId = user?.id ?? null;
   const {
     selectedDeckConfig,
@@ -70,6 +80,17 @@ export default function App() {
   } = useProgress(userId);
   const { messages } = useSiteMessages();
 
+  // Registers the Remove Ads product and resolves any transaction StoreKit
+  // still has pending from a previous launch -- see src/iap/purchases.js
+  // for why redelivering unfinished transactions through the same
+  // "approved" handler used for new purchases covers both cases. No-ops
+  // entirely on web/Android; requires userId since verifying a purchase
+  // needs a signed-in Supabase session.
+  useEffect(() => {
+    if (!userId) return;
+    initPurchases({ onVerified: refreshProfile });
+  }, [userId, refreshProfile]);
+
   return (
     <ThemeProvider>
       <AppShell
@@ -80,6 +101,7 @@ export default function App() {
         checkUsernameAvailable={checkUsernameAvailable}
         updateUsername={updateUsername}
         updateAvatar={updateAvatar}
+        dismissRemoveAdsBanner={dismissRemoveAdsBanner}
         selectedDeckConfig={selectedDeckConfig}
         unlockedDecks={unlockedDecks}
         deckProgress={deckProgress}
@@ -102,6 +124,7 @@ function AppShell({
   checkUsernameAvailable,
   updateUsername,
   updateAvatar,
+  dismissRemoveAdsBanner,
   selectedDeckConfig,
   unlockedDecks,
   deckProgress,
@@ -162,6 +185,8 @@ function AppShell({
           selectDeck={selectDeck}
           tagline={messages.tagline?.content}
           onViewFullLeaderboard={() => goToTab("leaderboard")}
+          onDismissRemoveAdsBanner={dismissRemoveAdsBanner}
+          onViewRemoveAds={() => goToTab("unlocks")}
         />
       </div>
       <Suspense fallback={<TabLoadingFallback />}>

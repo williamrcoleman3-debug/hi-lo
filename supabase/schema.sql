@@ -443,6 +443,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select referred_by is not null into v_already_referred
     from public.profiles
@@ -494,6 +495,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select p.spendable_tokens into v_tokens from public.profiles p where p.id = auth.uid();
 
@@ -536,6 +538,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select p.lifeline_balance into v_balance from public.profiles p where p.id = auth.uid();
 
@@ -1062,12 +1065,43 @@ create table public.game_sessions (
   -- only by analyze_call_timing() below for manual review before a prize
   -- payout; never read on any live gameplay path.
   call_timestamps timestamptz[] not null default array[]::timestamptz[],
+  -- Client-generated UUID, one per install/browser profile (see
+  -- src/device/deviceId.js), passed to start_game() and stamped here at
+  -- creation, never updated afterward. Purely a manual-review aid -- never
+  -- read on any live gameplay path, never used to block, throttle, or
+  -- otherwise alter anything about a session. A reviewer looking at
+  -- flagged sessions (contest_review) can join back to this column to see
+  -- whether one device_id maps to many different accounts; nothing more.
+  -- Self-reported by the client, so it's a signal, not a proof -- treat it
+  -- the same evidentiary weight as analyze_call_timing's output: worth a
+  -- human's attention, not conclusive on its own.
+  device_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.game_sessions enable row level security;
 revoke all on public.game_sessions from anon, authenticated;
+
+-- contest_review: one row per session that has ever been auto-flagged for
+-- manual review, primary-keyed on the session itself so a session can only
+-- ever have one review record no matter how many times it gets flagged
+-- (see the two writers below). `decision` starts 'pending' and stays that
+-- way until a human sets it via a direct SQL editor update -- there is no
+-- client or RPC write path to this table at all, by design (same lockdown
+-- pattern as game_sessions itself). Purely a manual-review aid; nothing
+-- reads this to gate or alter live gameplay.
+create table public.contest_review (
+  session_id uuid primary key references public.game_sessions (id),
+  flagged_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  reviewed_by text,
+  decision text check (decision in ('approved', 'rejected', 'pending')),
+  notes text
+);
+
+alter table public.contest_review enable row level security;
+revoke all on public.contest_review from anon, authenticated;
 
 -- Per-user request budget for the session RPCs below -- a fixed 1-second
 -- window, keyed only on auth.uid() (never IP, never anything about the
@@ -1192,15 +1226,27 @@ revoke all on function public.check_daily_play_limit() from public, anon, authen
 -- (see game_sessions.speed_mode above) -- the client passes the player's
 -- current profiles.game_mode preference at call time; changing the
 -- preference afterward never affects a session already in progress.
+--
+-- p_device_id is the client-generated fingerprint from
+-- src/device/deviceId.js -- stamped onto the session for manual-review
+-- visibility only (see game_sessions.device_id above). Optional/nullable:
+-- an older client build or a request with localStorage unavailable simply
+-- omits it, and the session is created exactly as before with device_id
+-- left null. Never read on any live gameplay path, never affects rate
+-- limiting, the daily play limit, or anything else about this function's
+-- behavior.
+--
 -- Dropped and recreated (not just replaced) because adding a parameter to
 -- an existing function creates a second overload rather than replacing it
 -- -- Postgres identifies functions by name + argument types, and
--- start_game(text) and start_game(text, boolean) are different signatures.
--- Two overloads would leave PostgREST unable to resolve which one a call
--- with just p_deck_id should hit.
+-- start_game(text), start_game(text, boolean), and
+-- start_game(text, boolean, text) are all different signatures. Leaving
+-- old overloads in place would leave PostgREST unable to resolve which one
+-- a call with fewer arguments should hit.
 drop function if exists public.start_game(text);
+drop function if exists public.start_game(text, boolean);
 
-create function public.start_game(p_deck_id text, p_speed_mode boolean default false)
+create function public.start_game(p_deck_id text, p_speed_mode boolean default false, p_device_id text default null)
 returns table (session_id uuid, compare_card jsonb, cards_left int, ante bigint)
 language plpgsql
 security definer
@@ -1221,16 +1267,16 @@ begin
   v_compare := v_deck[1];
   v_deck := v_deck[2:array_length(v_deck, 1)];
 
-  insert into public.game_sessions (user_id, deck_id, deck, compare_card, speed_mode)
-  values (auth.uid(), p_deck_id, v_deck, v_compare, coalesce(p_speed_mode, false))
+  insert into public.game_sessions (user_id, deck_id, deck, compare_card, speed_mode, device_id)
+  values (auth.uid(), p_deck_id, v_deck, v_compare, coalesce(p_speed_mode, false), p_device_id)
   returning id into v_session_id;
 
   return query select v_session_id, v_compare, array_length(v_deck, 1), public.deck_ante(p_deck_id);
 end;
 $$;
 
-revoke all on function public.start_game(text, boolean) from public, anon, authenticated;
-grant execute on function public.start_game(text, boolean) to authenticated;
+revoke all on function public.start_game(text, boolean, text) from public, anon, authenticated;
+grant execute on function public.start_game(text, boolean, text) to authenticated;
 
 -- The one call-resolution endpoint. Draws the next card from the server's
 -- own copy of the deck, decides correctness itself, and independently
@@ -1360,6 +1406,20 @@ begin
            call_timestamps = call_timestamps || clock_timestamp(),
            updated_at = now()
      where id = p_session_id;
+
+    -- Earlier proactive review flag -- logs only, never blocks play and
+    -- never emails anyone -- the moment a Single Deck run first crosses
+    -- win_streak 40, well before the 51-streak contest payout line, so a
+    -- reviewer can see a suspicious run building instead of only ever
+    -- looking at one that already won. contest_review.session_id is the
+    -- primary key, so `on conflict do nothing` makes every attempt after
+    -- the first (on hand 41, 42, ... up to 51) a cheap no-op single-row
+    -- lookup rather than tracking the exact 39->40 transition separately.
+    if v_session.deck_id = 'single-deck' and v_new_streak >= 40 then
+      insert into public.contest_review (session_id, decision, notes)
+      values (p_session_id, 'pending', 'auto-flag: win_streak reached 40 on single-deck')
+      on conflict (session_id) do nothing;
+    end if;
 
     v_full_clear_target := public.full_clear_target(v_session.deck_id);
 
@@ -1520,6 +1580,22 @@ begin
     return;
   end if;
 
+  -- Persist the review flag independent of everything below -- this must
+  -- land even if email config is missing or the send itself fails (both
+  -- handled further down), since the review record, not the email, is the
+  -- durable trail. If the win_streak>=40 flag in make_call() already
+  -- created a 'pending' row for this session, append to its notes instead
+  -- of clobbering reviewed_at/reviewed_by/decision a human may have
+  -- already started filling in.
+  insert into public.contest_review (session_id, decision, notes)
+  values (
+    p_session_id,
+    'pending',
+    format('auto-flag: win_streak reached full clear (%s) on single-deck, banked', v_session.win_streak)
+  )
+  on conflict (session_id) do update
+    set notes = coalesce(public.contest_review.notes || E'\n' || excluded.notes, excluded.notes);
+
   select username into v_username from public.profiles where id = v_session.user_id;
   select email into v_email from auth.users where id = v_session.user_id;
 
@@ -1531,7 +1607,7 @@ begin
   v_subject := format('Contest win: %s just cleared Single Deck (51/51)', coalesce(v_username, v_session.user_id::text));
 
   v_body := format(
-    E'A qualifying Single Deck Win Streak (51/51) was just confirmed.\n\nThe 1-week manual review clock starts now.\n\nWinner\n  Username: %s\n  Email: %s\n  Account ID: %s\n\nWin\n  Deck: %s\n  Win streak: %s\n  Session ID: %s\n  Confirmed at: %s UTC\n\nTo start the review, run these in the Supabase SQL editor:\n  select * from public.find_sessions_for_review(%L);\n  select * from public.analyze_call_timing(%L);\n',
+    E'A qualifying Single Deck Win Streak (51/51) was just confirmed.\n\nThe 1-week manual review clock starts now.\n\nWinner\n  Username: %s\n  Email: %s\n  Account ID: %s\n\nWin\n  Deck: %s\n  Win streak: %s\n  Session ID: %s\n  Confirmed at: %s UTC\n\nTo start the review, run these in the Supabase SQL editor:\n  select * from public.find_sessions_for_review(%L);\n  select * from public.analyze_call_timing(%L);\n  select * from public.analyze_cross_session_timing(%L);\n  select * from public.contest_review where session_id = %L;\n',
     coalesce(v_username, '(unknown)'),
     coalesce(v_email, '(unknown)'),
     v_session.user_id,
@@ -1539,6 +1615,8 @@ begin
     v_session.win_streak,
     v_session.id,
     to_char(now() at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS'),
+    v_username,
+    v_session.id,
     v_username,
     v_session.id
   );
@@ -1924,6 +2002,68 @@ $$;
 
 revoke all on function public.analyze_call_timing(uuid) from public, anon, authenticated;
 
+-- Cross-session counterpart to analyze_call_timing() above -- that one
+-- checks whether the gaps WITHIN one session are suspiciously uniform;
+-- this checks whether a player's own AVERAGE pace is suspiciously uniform
+-- ACROSS several different sessions. A real player's average pace
+-- naturally drifts session to session (mood, fatigue, distraction, a
+-- different device); a bot replaying the same script tends to land on
+-- close to the same average every time, even across sessions where a
+-- human reviewer only checked analyze_call_timing on the one that won.
+--
+-- Pulls the player's last p_session_limit sessions with at least 2 resolved
+-- hands (a single-hand session has no gap to average), computes each
+-- session's own mean inter-hand gap, then reports the mean/stddev/CV of
+-- THOSE per-session means. Same suspiciously-uniform threshold as
+-- analyze_call_timing (coefficient of variation < 0.15) -- same manual-
+-- review-only posture: this flags, it never blocks or bans, and carries no
+-- EXECUTE grant to any client role.
+create or replace function public.analyze_cross_session_timing(p_username text, p_session_limit int default 10)
+returns table (
+  sessions_analyzed int,
+  session_mean_gaps numeric[],
+  cross_session_mean_seconds numeric,
+  cross_session_stddev_seconds numeric,
+  cross_session_coefficient_of_variation numeric,
+  suspiciously_uniform_across_sessions boolean
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  with target_sessions as (
+    select gs.id, gs.call_timestamps
+      from public.game_sessions gs
+      join public.profiles p on p.id = gs.user_id
+     where lower(p.username) = lower(p_username)
+       and array_length(gs.call_timestamps, 1) > 1
+     order by gs.created_at desc
+     limit p_session_limit
+  ),
+  per_session_gaps as (
+    select ts.id as session_id,
+           extract(epoch from (ts.call_timestamps[i] - ts.call_timestamps[i - 1])) as gap_seconds
+      from target_sessions ts, generate_subscripts(ts.call_timestamps, 1) as i
+     where i > 1
+  ),
+  per_session_means as (
+    select session_id, avg(gap_seconds) as mean_gap
+      from per_session_gaps
+     group by session_id
+  )
+  select
+    (select count(*) from target_sessions)::int,
+    (select array_agg(round(mean_gap::numeric, 3) order by mean_gap) from per_session_means),
+    round(avg(mean_gap)::numeric, 3),
+    round(stddev(mean_gap)::numeric, 3),
+    round((stddev(mean_gap) / nullif(avg(mean_gap), 0))::numeric, 3),
+    coalesce(stddev(mean_gap) / nullif(avg(mean_gap), 0) < 0.15, false)
+  from per_session_means;
+$$;
+
+revoke all on function public.analyze_cross_session_timing(text, int) from public, anon, authenticated;
+
 -- Convenience for finding which session to run analyze_call_timing() on --
 -- a reviewer looking at a specific player's contest-record streak can find
 -- the right session_id here rather than needing to already know it.
@@ -1961,11 +2101,9 @@ revoke all on function public.find_sessions_for_review(text) from public, anon, 
 --
 -- SECURITY NOTE: profiles' existing "users can update their own profile"
 -- RLS policy (near the top of this file) is row-scoped, not
--- column-scoped -- without the column-level REVOKE below, a signed-in
--- client could set ads_disabled = true on themselves directly via a plain
--- client-side update, bypassing the $4.99 purchase entirely. The REVOKE
--- closes that specifically for the three server-owned columns added here
--- and changes nothing about any existing column's behavior.
+-- column-scoped -- RLS alone can't stop a signed-in client from setting
+-- ads_disabled = true on themselves directly via a plain client-side
+-- update, bypassing the $4.99 purchase entirely.
 -- ============================================================================
 
 alter table public.profiles add column if not exists ads_disabled boolean not null default false;
@@ -1978,7 +2116,46 @@ alter table public.profiles add column if not exists hands_since_last_ad integer
 -- whenever it flips ads_disabled back to false.
 alter table public.profiles add column if not exists remove_ads_banner_dismissed boolean not null default false;
 
-revoke update (ads_disabled, last_ad_shown_at, hands_since_last_ad) on public.profiles from authenticated, anon;
+-- ---------------------------------------------------------------------------
+-- CLIENT-WRITABLE COLUMN ALLOWLIST for profiles.
+--
+-- This used to be a narrow `revoke update (ads_disabled, last_ad_shown_at,
+-- hands_since_last_ad) on public.profiles from authenticated, anon;` here.
+-- That statement is a no-op against Supabase's default setup and always
+-- was: Supabase grants `update on all tables in schema public` to
+-- authenticated/anon at the TABLE level when a project is created. Postgres
+-- privileges are additive across table-level and column-level ACLs -- a
+-- column-level REVOKE only removes a column-level grant, it cannot cancel
+-- out a table-level grant that's still sitting underneath it authorizing
+-- every column regardless. So that revoke ran clean, with no error, and
+-- changed nothing: `ads_disabled` (and every other column on this table,
+-- including is_admin, is_contest_banned, lifeline_balance,
+-- spendable_tokens, current_streak/longest_streak, has_banked_ever,
+-- has_played_ever, referral_reward_granted, referred_signups_count,
+-- qualified_referral_count, referred_by, last_banked_date) was directly
+-- writable by any authenticated client the entire time, bypassing every
+-- RPC that was supposed to be the only path to these values -- most
+-- seriously, a client could set is_admin = true on their own row and
+-- check_daily_play_limit() (defined earlier in this file) would then exempt that account from
+-- the 101-games/day cap entirely, or inflate lifeline_balance /
+-- spendable_tokens directly, removing the cost those limits exist to
+-- impose. All of this was reachable via a plain
+-- supabase-js `.from('profiles').update(...)` call -- no UI needed, since
+-- the anon/authenticated key is necessarily public. Confirmed live via
+-- `select grantee, column_name from information_schema.column_privileges
+-- where table_name = 'profiles' and privilege_type = 'UPDATE';` before and
+-- after this fix.
+--
+-- The only correct way to carve out column-level exceptions is to revoke
+-- the table-level grant entirely, then re-grant UPDATE column-by-column
+-- for exactly what should stay client-writable. anon gets nothing --
+-- RLS's `with check (auth.uid() = id)` can never pass for a signed-out
+-- request in the first place, so there's no legitimate case for it to hold
+-- any UPDATE grant on this table at all.
+-- ---------------------------------------------------------------------------
+revoke update on public.profiles from authenticated, anon;
+grant update (username, avatar, equipped_theme, game_mode, remove_ads_banner_dismissed)
+  on public.profiles to authenticated;
 
 -- iap_transactions: one row per StoreKit transaction ever seen for this
 -- product, keyed for idempotency on Apple's own stable
@@ -2043,6 +2220,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select ads_disabled, last_ad_shown_at into v_ads_disabled, v_last_shown
     from public.profiles
@@ -2085,6 +2263,7 @@ begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
+  perform public.check_rate_limit();
 
   select ads_disabled into v_ads_disabled from public.profiles where id = auth.uid() for update;
   if coalesce(v_ads_disabled, false) then

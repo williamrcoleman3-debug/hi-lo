@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client.js";
+import { getDeviceId } from "../device/deviceId.js";
 
 // Thin wrappers over the server-authoritative RPCs (see supabase/schema.sql
 // -- start_game/make_call/use_lifeline_in_session/bust_session/bank_session).
@@ -7,7 +8,14 @@ import { supabase } from "../supabase/client.js";
 // compare card and the outcome of each call.
 
 export async function startGame(deckId, speedMode = false) {
-  const { data, error } = await supabase.rpc("start_game", { p_deck_id: deckId, p_speed_mode: speedMode });
+  const { data, error } = await supabase.rpc("start_game", {
+    p_deck_id: deckId,
+    p_speed_mode: speedMode,
+    // Manual-review signal only (see schema.sql's game_sessions.device_id)
+    // -- never read on any gameplay path. null is a normal value here
+    // (private browsing, storage disabled), start_game() accepts it as-is.
+    p_device_id: getDeviceId(),
+  });
   if (error) throw error;
   const row = data?.[0];
   return {

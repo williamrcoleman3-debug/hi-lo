@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-07T00:00:00.000Z",
+  "title": "Design System: Hi-Lo Same",
+  "extensions": {
+    "colorMeta": {
+      "signal-teal": { "role": "primary", "displayName": "Signal Teal", "canonical": "#2DD4BF", "tonalRamp": ["#04342C", "#085041", "#0F6E56", "#1D9E75", "#5DCAA5", "#9FE1CB", "#CEF0E4", "#E1F5EE"] },
+      "void": { "role": "neutral", "displayName": "Void", "canonical": "#0B0E14", "tonalRamp": ["#0B0E14", "#151923", "#1E2430", "#2E3646", "#7A8496", "#A9B2C3", "#DDE1E8", "#E7EAF0"] },
+      "panel-ink": { "role": "neutral", "displayName": "Panel Ink", "canonical": "#151923" },
+      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "#1E2430" },
+      "hairline-strong": { "role": "neutral", "displayName": "Hairline Strong", "canonical": "#2E3646" },
+      "text-primary": { "role": "neutral", "displayName": "Text Primary", "canonical": "#E7EAF0" },
+      "text-secondary": { "role": "neutral", "displayName": "Text Secondary", "canonical": "#A9B2C3" },
+      "text-muted": { "role": "neutral", "displayName": "Text Muted", "canonical": "#7A8496" },
+      "ticker-green": { "role": "success", "displayName": "Ticker Green", "canonical": "#22C55E", "tonalRamp": ["#173404", "#27500A", "#3B6D11", "#639922", "#97C459", "#C0DD97", "#DDEDC3", "#EAF3DE"] },
+      "ticker-red": { "role": "danger", "displayName": "Ticker Red", "canonical": "#EF4444", "tonalRamp": ["#501313", "#791F1F", "#A32D2D", "#E24B4A", "#F09595", "#F7C1C1", "#FBDCDC", "#FCEBEB"] },
+      "warning-amber": { "role": "warning", "displayName": "Warning Amber", "canonical": "#F59E0B" },
+      "call-lower": { "role": "identity", "displayName": "Call Lower", "canonical": "#F97316" },
+      "call-higher": { "role": "identity", "displayName": "Call Higher", "canonical": "#A855F7" },
+      "call-black": { "role": "identity", "displayName": "Call Black", "canonical": "#111111" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The dealt card's rank and suit only." },
+      "headline": { "displayName": "Headline", "purpose": "Screen titles." },
+      "title": { "displayName": "Title", "purpose": "Panel/section sub-headers, button labels." },
+      "body": { "displayName": "Body", "purpose": "Descriptive copy and rules paragraphs." },
+      "label": { "displayName": "Label", "purpose": "Uppercase stat labels and call-button odds percentages." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "card-pop", "value": "scale(0.85→1.04→1) opacity(0.3→1), 0.18s ease-out", "purpose": "Card deal punch-in." },
+      { "name": "screen-shake", "value": "translateX oscillation, 0.18s ease-in-out", "purpose": "Bust feedback." },
+      { "name": "float-toast", "value": "translateY(0→-60px) opacity(0→1→0), 0.9s ease-out", "purpose": "Floating token-gain toast." },
+      { "name": "tap-scale", "value": "scale(0.95) on :active, transform transition", "purpose": "Tactile confirmation on every button, no hover state." },
+      { "name": "streak-glow", "value": "text-shadow, two stacked layers scaling with min(streak,10)/10", "purpose": "Momentum feedback on the streak number." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Bank / Share / Redeem lifeline — the one accent-filled CTA per screen.",
+      "html": "<button class=\"ds-btn-primary\">Bank 4,200 points</button>",
+      "css": ".ds-btn-primary { background: #2DD4BF; color: #0B0E14; font-weight: 600; padding: 12px 16px; border: none; border-radius: 8px; transition: transform 0.1s ease-out; } .ds-btn-primary:active { transform: scale(0.95); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary path out of a decision (start new game, decline lifeline).",
+      "html": "<button class=\"ds-btn-ghost\">Start new game</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: #E7EAF0; font-weight: 600; padding: 12px 16px; border: 2px solid #2E3646; border-radius: 8px; transition: transform 0.1s ease-out; } .ds-btn-ghost:active { transform: scale(0.95); }"
+    },
+    {
+      "name": "Call Button",
+      "kind": "button",
+      "refersTo": "call-identity",
+      "description": "Fixed-identity outcome-agnostic call button (Lower/Same/Higher/Red/Black each get their own solid fill).",
+      "html": "<button class=\"ds-btn-call\">Higher<span class=\"ds-btn-call-odds\">54%</span></button>",
+      "css": ".ds-btn-call { background: #A855F7; color: #0B0E14; font-weight: 600; padding: 12px 8px; border: none; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform 0.1s ease-out; } .ds-btn-call:active { transform: scale(0.95); } .ds-btn-call-odds { font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.85; }"
+    },
+    {
+      "name": "Playing Card",
+      "kind": "card",
+      "refersTo": "card-face",
+      "description": "The dealt card face.",
+      "html": "<div class=\"ds-card\"><span class=\"ds-card-rank\">K</span><span class=\"ds-card-suit\">♥</span></div>",
+      "css": ".ds-card { width: 176px; height: 256px; background: #E7EAF0; border: 2px solid #1E2430; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; } .ds-card-rank { font-size: 60px; font-weight: 700; line-height: 1; color: #B8464C; } .ds-card-suit { font-size: 36px; line-height: 1; margin-top: 8px; color: #B8464C; }"
+    },
+    {
+      "name": "Deck Chip",
+      "kind": "chip",
+      "refersTo": "chip-selected",
+      "description": "Deck switcher / tab nav selection chip.",
+      "html": "<button class=\"ds-chip-selected\">Single Deck<span class=\"ds-chip-meta\">ante 400 · 52 cards</span></button>",
+      "css": ".ds-chip-selected { background: rgba(45,212,191,0.12); color: #2DD4BF; border: 2px solid #2DD4BF; border-radius: 8px; padding: 8px 12px; text-align: left; font-weight: 600; font-size: 14px; } .ds-chip-meta { display: block; font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.85; margin-top: 2px; }"
+    },
+    {
+      "name": "Username Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Text field with inline validation caption.",
+      "html": "<div class=\"ds-field\"><input class=\"ds-input\" placeholder=\"username\" /><span class=\"ds-field-hint\">2–16 letters only (a-z) — no numbers or symbols.</span></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 4px; } .ds-input { background: #0B0E14; color: #E7EAF0; border: 1px solid #1E2430; border-radius: 8px; padding: 8px 12px; font-size: 16px; } .ds-field-hint { font-size: 12px; color: #7A8496; }"
+    },
+    {
+      "name": "Status Panel",
+      "kind": "custom",
+      "refersTo": "panel-message",
+      "description": "The matched border/soft-background/text trio used for every informational surface (rules sections, status strip, banners).",
+      "html": "<div class=\"ds-panel-win\">Hand won — streak climbing.</div>",
+      "css": ".ds-panel-win { border: 1px solid #22C55E; background: rgba(34,197,94,0.12); color: #22C55E; border-radius: 8px; padding: 12px 16px; font-size: 14px; text-align: center; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Trading Terminal",
+    "overview": "Hi-Lo Same reads as a dense, flat, dark console built for someone executing a fast decision under real stakes — not a game skin, not a casino face. Numbers move like live prices: every value that can change (streak, vault, timer, ante, odds) renders in tabular numerals so nothing jitters as digits shift. Uppercase micro-labels sit above the numbers they describe, exactly like a terminal's status strip.\n\nThe mood is tense, alert, high-stakes. A six-second countdown bar shifts from Signal Teal through Warning Amber to Ticker Red as time runs out; the streak number's glow intensifies with each consecutive win (capped at streak 10); a bust triggers an instant full-screen red flash plus a screen-shake, a win an instant green flash — feedback lands in under 200ms. Every control confirms a tap by scaling to 95%, the system's one interactive motion beyond color and opacity.\n\nThis is a confirmed rejection, not a gap: an earlier \"Poker Table\" theme (felt-gradient background, wooden-frame chrome) was removed outright. No gradients, no felt, no wood grain, no drop shadows exist anywhere in the current system.",
+    "keyCharacteristics": [
+      "Near-black flat surfaces, one signal-teal accent used sparingly",
+      "Tabular numerals on every value that can change",
+      "Solid-fill, fixed-identity color coding (outcomes vs. call buttons vs. status)",
+      "Tactile tap-down confirmation (active:scale-95) on every control, no hover-only affordances",
+      "Zero gradients, zero shadows, by explicit design history"
+    ],
+    "rules": [
+      { "name": "The Outcome-Only Rule", "body": "Ticker Green and Ticker Red mean this hand is resolved — never a preview or prediction. A call button's color is fixed identity, not a hint about whether it will win.", "section": "colors" },
+      { "name": "The One Signal Rule", "body": "Signal Teal is the only color that means alive/actionable. Everything else is inert neutral, a fixed outcome color, or a fixed identity color.", "section": "colors" },
+      { "name": "The Tabular Numerals Rule", "body": "Every number that can change in place renders with tabular numerals so surrounding layout never shifts as digits change width.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "No box-shadow, no gradient, anywhere, under any circumstance. State and hierarchy are communicated with color, border weight, and flat layering only.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep Signal Teal to the \"one live thing\" role — CTA, selection, and positive momentum only.",
+      "Do pair every state color as a matched border + soft-background + text trio in the same hue.",
+      "Do render every number that can change with tabular numerals.",
+      "Do keep every button's radius at 8px and its tap feedback at active:scale-95.",
+      "Do reserve Ticker Green and Ticker Red for confirmed outcomes only."
+    ],
+    "donts": [
+      "Don't add box-shadow or a gradient anywhere.",
+      "Don't introduce a second accent color alongside Signal Teal.",
+      "Don't color a call button to hint at whether it's likely to win.",
+      "Don't rely on a hover-only affordance as the sole way to discover a control.",
+      "Don't render a heart or diamond suit in Ticker Red."
+    ]
+  }
+}

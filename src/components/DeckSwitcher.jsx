@@ -1,6 +1,7 @@
 import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
 import { ACTIVE_DECKS, UNLOCK_REQUIREMENTS, RANKS } from "../engine";
+import { IconLock } from "./icons.jsx";
 
 // Hides itself entirely when there's only one (or zero) active deck to
 // choose from — no point showing a switcher with a single option. Reads
@@ -35,7 +36,7 @@ export function DeckSwitcher({ selectedDeck, unlockedDecks, deckProgress, onSele
           >
             <div className="flex items-center justify-between text-sm font-semibold">
               <span>{deck.name}</span>
-              {!unlocked && <span aria-hidden="true">🔒</span>}
+              {!unlocked && <IconLock />}
             </div>
             <div className="text-xs" style={{ ...FONT_TABULAR, opacity: 0.85 }}>
               ante {deck.ante.toLocaleString()} · {cardCount} cards

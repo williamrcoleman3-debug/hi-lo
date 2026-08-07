@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Impeccable live-mode runtime state (not project source)
+.impeccable/live/roots.json
+.impeccable/live/sessions/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

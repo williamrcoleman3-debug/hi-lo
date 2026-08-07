@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
 import { ACTIVE_DECKS } from "../engine";
+import { IconFlame } from "./icons.jsx";
 import {
   fetchLeaderboard,
   fetchSingleDeckWinStreakLeaderboard,
@@ -22,11 +23,10 @@ const STREAK_BOARDS = [
   { id: "longest", label: "Longest Daily Streak Ever", blurb: "Permanent bragging rights — doesn't disappear just because a current streak broke." },
 ];
 
-// Medals for the top 3, explicit numeric rank for everyone else — every
-// entry on every board shows what place it's in, not just 1-3.
-const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+// Every entry on every board shows its explicit numeric rank, not just a
+// top-3 special case -- tabular digits, no medal glyphs.
 function rankDisplay(i) {
-  return RANK_MEDALS[i] ?? `#${i + 1}`;
+  return `#${i + 1}`;
 }
 
 function LeaderboardTable({ columns, rows, loading, loadError, emptyMessage }) {
@@ -213,7 +213,7 @@ function DailyStreakSection() {
         className="w-full max-w-4xl rounded-lg px-4 py-3 mb-4 text-xs"
         style={{ border: `1px solid ${C.accent}`, background: C.accentSoft, color: C.textSecondary }}
       >
-        🔥 Account-wide — not tied to any one deck. Banking on any deck, any day, keeps this alive.
+        <IconFlame /> Account-wide — not tied to any one deck. Banking on any deck, any day, keeps this alive.
       </div>
 
       <div className="w-full max-w-4xl grid grid-cols-2 gap-2 mb-6">

@@ -5,6 +5,7 @@ import { Card } from "./Card";
 import { WinStreakLeaderboardWidget } from "./WinStreakLeaderboardWidget";
 import { DeckSwitcher } from "./DeckSwitcher";
 import { RemoveAdsBanner } from "./RemoveAdsBanner";
+import { IconLifebuoy } from "./icons.jsx";
 
 // Pure presentational render for the game table -- identical markup for
 // anonymous (local-engine) and signed-in (server-authoritative) play. Every
@@ -131,7 +132,7 @@ export function GameScreenView({
           {userId && (
             <div className="mt-1 flex items-center justify-end gap-2 text-xs">
               <span style={{ color: C.textMuted, ...FONT_TABULAR }}>
-                🛟 {profile?.lifeline_balance ?? 0} lifeline{profile?.lifeline_balance === 1 ? "" : "s"}
+                <IconLifebuoy /> {profile?.lifeline_balance ?? 0} lifeline{profile?.lifeline_balance === 1 ? "" : "s"}
               </span>
               <button
                 onClick={handleRedeemLifeline}
@@ -212,10 +213,12 @@ export function GameScreenView({
                 >
                   <div
                     style={{
-                      width: `${timerPct}%`,
+                      width: "100%",
                       height: "100%",
                       background: timerColor,
-                      transition: "width 0.05s linear, background 0.2s ease",
+                      transform: `scaleX(${timerPct / 100})`,
+                      transformOrigin: "left",
+                      transition: "transform 0.05s linear, background 0.2s ease",
                     }}
                   />
                 </div>
@@ -303,7 +306,7 @@ export function GameScreenView({
                   className="rounded-lg font-semibold py-3 transition-transform active:scale-95"
                   style={{ background: C.accent, color: C.cardInk }}
                 >
-                  🛟 Use lifeline
+                  <IconLifebuoy /> Use lifeline
                 </button>
                 <button
                   onClick={declineLifeline}

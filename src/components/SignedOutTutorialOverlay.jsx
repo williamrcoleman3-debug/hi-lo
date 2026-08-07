@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { isDismissed, dismiss } from "../siteMessages/siteMessages.js";
+import { IconTrophy, IconCards } from "./icons.jsx";
 
 const PAGES = [
   {
-    title: "🏆 $25,000 Prize Contest",
+    title: (
+      <>
+        <IconTrophy /> $25,000 Prize Contest
+      </>
+    ),
     body: (C) => (
       <div className="flex flex-col gap-4">
         <p className="text-sm" style={{ color: C.textSecondary }}>
@@ -31,7 +36,11 @@ const PAGES = [
     ),
   },
   {
-    title: "🃏 How The Game Works",
+    title: (
+      <>
+        <IconCards /> How The Game Works
+      </>
+    ),
     body: (C, onViewContestRules) => (
       <div className="flex flex-col gap-4">
         <ul className="flex flex-col gap-2 text-sm" style={{ color: C.textSecondary }}>

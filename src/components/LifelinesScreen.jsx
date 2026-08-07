@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
 import { redeemLifeline, LIFELINE_COST_TOKENS } from "../lifelines/lifelines.js";
+import { IconLifebuoy } from "./icons.jsx";
 
 export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferrals }) {
   const C = useThemeTokens();
@@ -23,7 +24,7 @@ export function LifelinesScreen({ userId, profile, refreshProfile, onViewReferra
       <div className="w-full max-w-4xl mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Lifelines</h1>
         <p className="text-sm mt-1" style={{ color: C.textSecondary }}>
-          🛟 Save the Game — when you're about to bust, spend a lifeline to forgive that one wrong call. Your win
+          <IconLifebuoy /> Save the Game — when you're about to bust, spend a lifeline to forgive that one wrong call. Your win
           streak just holds (it doesn't reset, but it doesn't climb either), and you keep playing. Up to 2 per game.
         </p>
       </div>

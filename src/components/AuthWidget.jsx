@@ -5,11 +5,12 @@ import { useAuth } from "../hooks/useAuth";
 import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
 import { DEFAULT_AVATAR } from "../avatars/registry";
+import { IconFlame } from "./icons.jsx";
 
 function Modal({ title, onClose, children }) {
   const C = useThemeTokens();
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" style={{ background: "rgba(11,14,20,0.94)" }}>
       <div
         className="w-full max-w-sm rounded-lg p-6"
         style={{ background: C.panel, border: `1px solid ${C.border}` }}
@@ -107,7 +108,7 @@ export function AuthWidget() {
         <span style={{ color: C.textSecondary }}>{profile.username}</span>
         {profile.current_streak > 0 && (
           <span style={{ color: C.accent, ...FONT_TABULAR }} title={`${profile.current_streak}-day banking streak`}>
-            🔥{profile.current_streak}
+<IconFlame />{profile.current_streak}
           </span>
         )}
         <button onClick={() => signOut()} style={{ color: C.textMuted }} className="underline">

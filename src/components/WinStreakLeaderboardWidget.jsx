@@ -3,7 +3,6 @@ import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
 import { fetchSingleDeckWinStreakLeaderboard, LEADERBOARD_BACKEND_READY } from "../leaderboard/api";
 
-const MEDALS = ["🥇", "🥈", "🥉"];
 const TOP_N = 10;
 
 // Condensed home-screen widget for the Single Deck Win Streak board — the
@@ -65,7 +64,7 @@ export function WinStreakLeaderboardWidget({ onViewFull }) {
           >
             <span className="flex items-center gap-2">
               <span style={{ color: C.textMuted, minWidth: "1.5em", display: "inline-block", ...FONT_TABULAR }}>
-                {MEDALS[i] ?? `#${i + 1}`}
+                {`#${i + 1}`}
               </span>
               {row.avatar && <span aria-hidden="true">{row.avatar}</span>}
               <span style={{ color: C.textPrimary }}>{row.username}</span>

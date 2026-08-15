@@ -20,7 +20,6 @@ import { initPurchases } from "./iap/purchases.js";
 const LeaderboardScreen = lazy(() =>
   import("./components/LeaderboardScreen").then((m) => ({ default: m.LeaderboardScreen }))
 );
-const BlackjackScreen = lazy(() => import("./components/BlackjackScreen").then((m) => ({ default: m.BlackjackScreen })));
 const UnlocksScreen = lazy(() => import("./components/UnlocksScreen").then((m) => ({ default: m.UnlocksScreen })));
 const StatsScreen = lazy(() => import("./components/StatsScreen").then((m) => ({ default: m.StatsScreen })));
 const ReferralScreen = lazy(() => import("./components/ReferralScreen").then((m) => ({ default: m.ReferralScreen })));
@@ -190,11 +189,6 @@ function AppShell({
         />
       </div>
       <Suspense fallback={<TabLoadingFallback />}>
-        {openedTabs.has("blackjack") && (
-          <div className="w-full flex flex-col items-center" style={{ display: tab === "blackjack" ? "flex" : "none" }}>
-            <BlackjackScreen />
-          </div>
-        )}
         {openedTabs.has("leaderboard") && (
           <div className="w-full flex flex-col items-center" style={{ display: tab === "leaderboard" ? "flex" : "none" }}>
             <LeaderboardScreen />

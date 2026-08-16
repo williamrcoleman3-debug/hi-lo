@@ -4,7 +4,7 @@ import { FONT_STACK } from "./themes/registry.js";
 import { useAuth } from "./hooks/useAuth";
 import { useProgress } from "./hooks/useProgress";
 import { useSiteMessages } from "./hooks/useSiteMessages";
-import { capturePendingReferral } from "./referral/referral.js";
+import { capturePendingReferral, initReferralDeepLinkCapture } from "./referral/referral.js";
 import { TabNav } from "./components/TabNav";
 import { AuthWidget } from "./components/AuthWidget";
 import { SiteBanner } from "./components/SiteBanner";
@@ -51,9 +51,13 @@ function TabLoadingFallback() {
 export default function App() {
   // Captures ?ref=username (if present) into localStorage on first load, so
   // it survives the OTP email round-trip — see src/referral/referral.js and
-  // useAuth.js#createProfile, which consumes it at signup time.
+  // useAuth.js#createProfile, which consumes it at signup time. On the iOS
+  // app this URL never carries a query string, so also listen for Universal
+  // Link opens (a no-op on web) — see initReferralDeepLinkCapture's own
+  // comment for why both paths are needed.
   useEffect(() => {
     capturePendingReferral();
+    initReferralDeepLinkCapture();
   }, []);
 
   const {

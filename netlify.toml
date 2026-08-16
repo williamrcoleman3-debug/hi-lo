@@ -8,3 +8,12 @@
 # Supabase (Postgres RPCs) exactly as before.
 [functions]
   directory = "netlify/functions"
+
+# Served with no file extension, at a fixed path Apple's CDN fetches
+# directly (never through the SPA) to verify the iOS app is allowed to
+# handle hi-lo-game.com Universal Links -- see ios/App/App/App.entitlements
+# and public/.well-known/apple-app-site-association, its source file.
+[[headers]]
+  for = "/.well-known/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json"

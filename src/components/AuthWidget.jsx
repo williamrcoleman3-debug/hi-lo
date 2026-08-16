@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
 import { useAuth } from "../hooks/useAuth";
@@ -6,6 +6,7 @@ import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
 import { DEFAULT_AVATAR } from "../avatars/registry";
 import { IconFlame } from "./icons.jsx";
+import { peekPendingReferral, setPendingReferral } from "../referral/referral.js";
 
 function Modal({ title, onClose, children }) {
   const C = useThemeTokens();
@@ -54,6 +55,23 @@ export function AuthWidget() {
   const [usernameSubmittable, setUsernameSubmittable] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+
+  // Pre-fills the invite-code field from whatever's already pending (the
+  // ?ref= query string on web, or a Universal Link tap on iOS -- see
+  // src/referral/referral.js) the moment the profile-setup modal appears.
+  // Reading it here rather than in useState's initializer matters: this
+  // component mounts once at app start, well before either capture path has
+  // necessarily run, but this effect re-fires each time the modal opens, by
+  // which point they have. `current || …` never clobbers a value the player
+  // already typed themselves. Kept above the isSupabaseConfigured early
+  // return below, same as every other hook here -- hooks can't follow a
+  // conditional return.
+  useEffect(() => {
+    if (user && !loading && !profile) {
+      setInviteCode((current) => current || peekPendingReferral() || "");
+    }
+  }, [user, loading, profile]);
 
   if (!isSupabaseConfigured) return null;
 
@@ -66,6 +84,7 @@ export function AuthWidget() {
     setAvatar(DEFAULT_AVATAR);
     setUsernameSubmittable(false);
     setError(null);
+    setInviteCode("");
   };
 
   const handleSendCode = async (e) => {
@@ -95,6 +114,10 @@ export function AuthWidget() {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    // Syncs whatever's currently in the field -- auto-filled, edited, typed
+    // from scratch, or cleared -- into the pending-referral slot that
+    // createProfile()/consumePendingReferral() reads right after this.
+    setPendingReferral(inviteCode);
     const { error } = await createProfile(username, avatar);
     setBusy(false);
     if (error) setError(error.message);
@@ -133,6 +156,21 @@ export function AuthWidget() {
             onSubmittableChange={setUsernameSubmittable}
             autoFocus
           />
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="invite-code-field" className="text-xs" style={{ color: C.textMuted }}>
+              Invite code (optional)
+            </label>
+            <input
+              id="invite-code-field"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              placeholder="a friend's username"
+              maxLength={16}
+              className="rounded-lg px-3 py-2 text-base"
+              style={inputStyle}
+            />
+          </div>
 
           <div className="flex flex-col gap-1">
             <span className="text-xs" style={{ color: C.textMuted }}>

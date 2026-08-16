@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.halifaxwaterco.hilo"],
+        "components": [
+          {
+            "/": "/*",
+            "comment": "Match every hi-lo-game.com URL, including the invite link's ?ref= query string, so a tap opens the app directly instead of Safari."
+          }
+        ]
+      }
+    ]
+  }
+}

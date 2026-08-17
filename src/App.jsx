@@ -91,7 +91,15 @@ export default function App() {
   // needs a signed-in Supabase session.
   useEffect(() => {
     if (!userId) return;
-    initPurchases({ onVerified: refreshProfile });
+    // TEMP DIAGNOSTIC -- initPurchases() previously had no .catch() here,
+    // so a rejected promise (e.g. store.initialize() failing) was an
+    // unhandled rejection with nothing visible in a normal user session.
+    // Remove this .catch() (or keep it, if it turns out to be worth
+    // keeping permanently) once the underlying cause is found.
+    console.log("[DIAG-REMOVE-ADS] calling initPurchases", { userId });
+    initPurchases({ onVerified: refreshProfile }).catch((err) => {
+      console.error("[DIAG-REMOVE-ADS] initPurchases rejected", err);
+    });
   }, [userId, refreshProfile]);
 
   return (

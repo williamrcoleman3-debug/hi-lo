@@ -235,10 +235,21 @@ function RemoveAdsSection({ profile }) {
     return () => clearInterval(id);
   }, []);
 
-  if (!profile) return null;
-
-  const purchased = profile.ads_disabled;
+  const purchased = profile?.ads_disabled;
   const isNative = Capacitor.isNativePlatform();
+
+  // TEMP DIAGNOSTIC -- same investigation as RemoveAdsBanner.jsx. Remove
+  // once resolved.
+  console.log("[DIAG-REMOVE-ADS] RemoveAdsSection render", {
+    hasProfile: !!profile,
+    ads_disabled: profile?.ads_disabled,
+    purchased,
+    isNative,
+    pending,
+    willRenderNull: !profile,
+  });
+
+  if (!profile) return null;
 
   const handleBuy = async () => {
     setBusy(true);

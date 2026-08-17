@@ -53,13 +53,30 @@ async function retryQueuedVerification(entry) {
 // onVerified fires every time a purchase (new or retried) is confirmed,
 // so the caller can refresh profile.ads_disabled from Supabase.
 export async function initPurchases({ onVerified } = {}) {
+  // TEMP DIAGNOSTIC -- tracking down a report that the Remove Ads banner/
+  // buy button aren't appearing on-device. This function previously had no
+  // logging and no try/catch, so a synchronous throw or a rejected
+  // store.initialize() would surface nowhere visible. Remove the logging
+  // (and decide whether to keep the try/catch) once the cause is found.
+  console.log("[DIAG-REMOVE-ADS] initPurchases called", {
+    initialized,
+    isNativePlatform: Capacitor.isNativePlatform(),
+  });
   if (initialized || !Capacitor.isNativePlatform()) return;
   initialized = true;
   onPurchaseVerified = onVerified ?? null;
 
-  store.register([{ id: REMOVE_ADS_PRODUCT_ID, type: ProductType.NON_CONSUMABLE, platform: Platform.APPLE_APPSTORE }]);
-  store.when().approved((transaction) => handleApproved(transaction));
-  await store.initialize([Platform.APPLE_APPSTORE]);
+  try {
+    store.register([{ id: REMOVE_ADS_PRODUCT_ID, type: ProductType.NON_CONSUMABLE, platform: Platform.APPLE_APPSTORE }]);
+    console.log("[DIAG-REMOVE-ADS] store.register called");
+    store.when().approved((transaction) => handleApproved(transaction));
+    console.log("[DIAG-REMOVE-ADS] approved listener registered, calling store.initialize");
+    await store.initialize([Platform.APPLE_APPSTORE]);
+    console.log("[DIAG-REMOVE-ADS] store.initialize resolved");
+  } catch (err) {
+    console.error("[DIAG-REMOVE-ADS] initPurchases failed", err);
+    throw err;
+  }
 
   setInterval(() => {
     drainPendingVerifications(retryQueuedVerification).catch((err) => {

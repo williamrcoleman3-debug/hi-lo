@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.halifaxwaterco.hilo"],
+        "appIDs": ["3UY65GWXB4.com.halifaxwaterco.hilo"],
         "components": [
           {
             "/": "/*",

@@ -110,12 +110,6 @@ export function GameScreenView({
         ))}
       </div>
 
-      {/* TEMP DIAGNOSTIC -- same investigation as RemoveAdsBanner.jsx/
-          UnlocksScreen.jsx. Remove once resolved. */}
-      {console.log("[DIAG-REMOVE-ADS] GameScreenView banner gate", {
-        userId,
-        hasProfile: !!profile,
-      })}
       {userId && <RemoveAdsBanner profile={profile} onDismiss={onDismissRemoveAdsBanner} onViewRemoveAds={onViewRemoveAds} />}
 
       {/* Header */}

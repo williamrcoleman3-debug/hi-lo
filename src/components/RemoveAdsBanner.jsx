@@ -8,16 +8,6 @@ import { useThemeTokens } from "../themes/ThemeContext";
 export function RemoveAdsBanner({ profile, onDismiss, onViewRemoveAds }) {
   const C = useThemeTokens();
 
-  // TEMP DIAGNOSTIC -- tracking down a report that this banner isn't
-  // appearing on-device despite ads_disabled/remove_ads_banner_dismissed
-  // both being false in the database. Remove once that's resolved.
-  console.log("[DIAG-REMOVE-ADS] RemoveAdsBanner render", {
-    hasProfile: !!profile,
-    ads_disabled: profile?.ads_disabled,
-    remove_ads_banner_dismissed: profile?.remove_ads_banner_dismissed,
-    willRenderNull: !profile || profile?.ads_disabled || profile?.remove_ads_banner_dismissed,
-  });
-
   if (!profile || profile.ads_disabled || profile.remove_ads_banner_dismissed) return null;
 
   return (

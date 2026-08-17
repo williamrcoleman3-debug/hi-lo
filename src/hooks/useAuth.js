@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "../supabase/client.js";
 import { consumePendingReferral } from "../referral/referral.js";
 
 const PROFILE_COLUMNS =
-  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed, has_password";
+  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -114,30 +114,12 @@ export function useAuth() {
     []
   );
 
-  // Sets/replaces the signed-in user's password, then records that this
-  // account has one via a direct client update -- same "direct client
-  // update, no RPC" pattern as equipped_theme/dismissRemoveAdsBanner below.
-  // No economic or contest impact if this flag is ever set without a real
-  // password having landed (it only gates a UI nag, nothing money- or
-  // fairness-adjacent), so it doesn't need the stricter server-side
-  // enforcement other profile columns get.
-  const setPassword = useCallback(
-    async (password) => {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) return { error };
-      const userId = session?.user?.id;
-      if (!userId) return { error: null };
-      const { data, error: profileError } = await supabase
-        .from("profiles")
-        .update({ has_password: true })
-        .eq("id", userId)
-        .select(PROFILE_COLUMNS)
-        .single();
-      if (!profileError) setProfile(data);
-      return { error: profileError };
-    },
-    [session?.user?.id]
-  );
+  // Sets/replaces the signed-in user's password -- used only by the Sign Up
+  // flow's profile-setup modal (username + password + invite code, all
+  // together). There is no retroactive "set a password" step for accounts
+  // that predate this -- those simply keep using one-time-code sign-in
+  // until their owner handles them directly outside the app.
+  const setPassword = useCallback((password) => supabase.auth.updateUser({ password }), []);
 
   const createProfile = useCallback(
     async (username, avatar) => {

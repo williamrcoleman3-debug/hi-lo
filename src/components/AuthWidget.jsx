@@ -185,21 +185,10 @@ export function AuthWidget() {
     }
     const { error: passwordError } = await setPassword(newPassword);
     setBusy(false);
-    // If this fails, the profile now exists (created just above) but
-    // profile.has_password is still false -- the next render falls straight
-    // into the dedicated "set a password to continue" modal below instead of
-    // this one, so there's nothing more to do here than surface the error.
+    // If this fails, the profile still exists (created just above) -- there
+    // is no separate forced step to fall back into, so just surface the
+    // error and let the player retry from here.
     if (passwordError) setError(passwordError.message);
-    else reset();
-  };
-
-  const handleSetPasswordOnly = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const { error } = await setPassword(newPassword);
-    setBusy(false);
-    if (error) setError(error.message);
     else reset();
   };
 
@@ -282,64 +271,6 @@ export function AuthWidget() {
             <AvatarPicker value={avatar} onChange={setAvatar} />
           </div>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
-            style={{ background: C.accent, color: C.cardInk }}
-          >
-            Save and continue
-          </button>
-          {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
-          <button
-            type="button"
-            onClick={() => signOut()}
-            style={{ color: C.textMuted }}
-            className="text-xs underline self-center"
-          >
-            sign out instead
-          </button>
-        </form>
-      </Modal>
-    );
-  }
-
-  // Signed in, has a profile, but from before passwords existed -- a
-  // one-time, non-skippable catch-up step so every account ends up with a
-  // password, without locking anyone out in the meantime.
-  if (user && !loading && profile && !profile.has_password) {
-    const canSubmit = !busy && passwordFieldsValid;
-    return (
-      <Modal title="Set a password to continue">
-        <form onSubmit={handleSetPasswordOnly} className="flex flex-col gap-3">
-          <p className="text-xs" style={{ color: C.textMuted }}>
-            We've added password sign-in — set one now to keep using your account.
-          </p>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder={`at least ${PASSWORD_MIN_LENGTH} characters`}
-            minLength={PASSWORD_MIN_LENGTH}
-            required
-            autoFocus
-            className="rounded-lg px-3 py-2 text-base"
-            style={inputStyle}
-          />
-          <input
-            type="password"
-            value={confirmNewPassword}
-            onChange={(e) => setConfirmNewPassword(e.target.value)}
-            placeholder="confirm password"
-            required
-            className="rounded-lg px-3 py-2 text-base"
-            style={inputStyle}
-          />
-          {passwordMismatch && (
-            <span className="text-xs" style={{ color: C.lose }}>
-              Passwords don't match.
-            </span>
-          )}
           <button
             type="submit"
             disabled={!canSubmit}

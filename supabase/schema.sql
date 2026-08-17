@@ -2123,16 +2123,6 @@ alter table public.profiles add column if not exists hands_since_last_ad integer
 -- whenever it flips ads_disabled back to false.
 alter table public.profiles add column if not exists remove_ads_banner_dismissed boolean not null default false;
 
--- Tracks whether this account has ever successfully set a password (see
--- useAuth.js#setPassword, called from AuthWidget). Defaults false so every
--- pre-existing account gets the one-time, non-skippable "set a password to
--- continue" step on its next sign-in; new signups flip it true immediately,
--- as part of the same submit that creates their profile. Direct client
--- update, no RPC -- same rationale as remove_ads_banner_dismissed just
--- above: this only gates a UI nag, nothing money- or fairness-adjacent, so
--- it doesn't need the stricter column-revoke pattern ads_disabled has.
-alter table public.profiles add column if not exists has_password boolean not null default false;
-
 -- ---------------------------------------------------------------------------
 -- CLIENT-WRITABLE COLUMN ALLOWLIST for profiles.
 --

@@ -61,7 +61,7 @@ export function useAuth() {
 
   // Sign Up only -- creates the (unconfirmed) auth account if none exists
   // yet, and sends the confirmation email (which carries both a magic link
-  // and the same 6-digit code used everywhere else in this file). See
+  // and the same 8-digit code used everywhere else in this file). See
   // AuthWidget's Sign Up flow: this is followed by a static Instructions
   // screen, not the code-entry step -- completing a session directly from
   // the confirmation-link tap was tried and confirmed unreliable on-device

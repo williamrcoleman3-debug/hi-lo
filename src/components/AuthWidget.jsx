@@ -450,7 +450,8 @@ export function AuthWidget() {
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="6-digit code"
+                placeholder="8-digit code"
+                maxLength={8}
                 required
                 autoFocus
                 className="rounded-lg px-3 py-2 text-base"

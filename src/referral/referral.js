@@ -83,7 +83,7 @@ export const EMAIL_LINK_CONFIRMED_EVENT = "hilo:email-link-confirmed";
 // and this can't be debugged live (no console access on this remote-build
 // setup). The auth flow (AuthWidget) no longer depends on a session ever
 // being established from this listener at all -- sign-in only ever happens
-// through the separate Sign In screen (6-digit code or password), which is
+// through the separate Sign In screen (8-digit code or password), which is
 // already proven to work. All this does for an auth-callback URL now is
 // notify anything listening (see EMAIL_LINK_CONFIRMED_EVENT above); it does
 // not touch storage or navigate anywhere.

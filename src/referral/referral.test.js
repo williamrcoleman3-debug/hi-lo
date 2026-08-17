@@ -12,6 +12,7 @@ import { App } from "@capacitor/app";
 import {
   capturePendingReferral,
   consumePendingReferral,
+  EMAIL_LINK_CONFIRMED_EVENT,
   initReferralDeepLinkCapture,
   isAuthCallbackUrl,
   peekPendingReferral,
@@ -181,25 +182,13 @@ describe("isAuthCallbackUrl", () => {
 });
 
 describe("initReferralDeepLinkCapture -- native platform", () => {
-  const originalLocation = window.location;
-
   beforeEach(() => {
     Capacitor.isNativePlatform.mockReturnValue(true);
     App.addListener.mockClear();
-    Object.defineProperty(window, "location", {
-      writable: true,
-      configurable: true,
-      value: { href: "" },
-    });
   });
 
   afterEach(() => {
     Capacitor.isNativePlatform.mockReturnValue(false);
-    Object.defineProperty(window, "location", {
-      writable: true,
-      configurable: true,
-      value: originalLocation,
-    });
   });
 
   function getRegisteredHandler() {
@@ -213,23 +202,30 @@ describe("initReferralDeepLinkCapture -- native platform", () => {
     expect(App.addListener).toHaveBeenCalledWith("appUrlOpen", expect.any(Function));
   });
 
-  it("captures the ref param for a referral-only link, without navigating away", () => {
+  it("captures the ref param for a referral-only link, without dispatching the confirm event", () => {
     const handler = getRegisteredHandler();
+    const listener = vi.fn();
+    window.addEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
 
     handler({ url: "https://hi-lo-game.com/?ref=alice" });
 
     expect(localStorage.getItem(PENDING_REFERRAL_KEY)).toBe("alice");
-    expect(window.location.href).toBe("");
+    expect(listener).not.toHaveBeenCalled();
+    window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
   });
 
-  it("navigates the webview for an auth-callback link, leaving any pending referral untouched", () => {
+  it("dispatches the confirm event for an auth-callback link, leaving any pending referral untouched and never navigating", () => {
     localStorage.setItem(PENDING_REFERRAL_KEY, "bob");
     const handler = getRegisteredHandler();
-    const authUrl = "https://hi-lo-game.com/#access_token=abc&type=magiclink";
+    const listener = vi.fn();
+    window.addEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
+    const originalHref = window.location.href;
 
-    handler({ url: authUrl });
+    handler({ url: "https://hi-lo-game.com/#access_token=abc&type=magiclink" });
 
-    expect(window.location.href).toBe(authUrl);
+    expect(listener).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(PENDING_REFERRAL_KEY)).toBe("bob");
+    expect(window.location.href).toBe(originalHref);
+    window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
   });
 });

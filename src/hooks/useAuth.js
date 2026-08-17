@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "../supabase/client.js";
 import { consumePendingReferral } from "../referral/referral.js";
 
 const PROFILE_COLUMNS =
-  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed";
+  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed, has_password";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -59,7 +59,16 @@ export function useAuth() {
     setProfile(data);
   }, [session?.user?.id, fetchProfile]);
 
-  const sendCode = useCallback(
+  // Sign Up only -- creates the (unconfirmed) auth account if none exists
+  // yet, and sends the confirmation email (which carries both a magic link
+  // and the same 6-digit code used everywhere else in this file). See
+  // AuthWidget's Sign Up flow: this is followed by a static Instructions
+  // screen, not the code-entry step -- completing a session directly from
+  // the confirmation-link tap was tried and confirmed unreliable on-device
+  // (see src/referral/referral.js), so Sign Up no longer tries to establish
+  // a session at all. The account only ever actually signs in later,
+  // through Sign In below.
+  const signUpWithEmail = useCallback(
     (email) =>
       supabase.auth.signInWithOtp({
         email,
@@ -72,9 +81,62 @@ export function useAuth() {
     []
   );
 
+  // Sign In only -- shouldCreateUser: false means this never silently
+  // creates an account for a mistyped or not-yet-registered email; the
+  // separate Sign Up entry point is the only path that creates one. GoTrue
+  // returns error.code "otp_disabled" for exactly this case (documented in
+  // @supabase/auth-js's ErrorCode union) -- rewritten here into a plain
+  // message pointing at Sign Up instead of leaking the raw API wording.
+  const requestSignInCode = useCallback(async (email) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
+    });
+    if (error?.code === "otp_disabled") {
+      return { error: { message: "No account found for that email — try Sign Up instead." } };
+    }
+    return { error };
+  }, []);
+
   const verifyCode = useCallback(
     (email, token) => supabase.auth.verifyOtp({ email, token, type: "email" }),
     []
+  );
+
+  // The other Sign In option, for anyone who's already set a password (see
+  // setPassword below). Supabase deliberately returns the same generic
+  // "invalid credentials" error whether the password is wrong or the
+  // account doesn't exist at all -- that's correct, standard behavior (not
+  // a bug to work around), since confirming or denying account existence
+  // from a password attempt would leak who has an account.
+  const signInWithPassword = useCallback(
+    (email, password) => supabase.auth.signInWithPassword({ email, password }),
+    []
+  );
+
+  // Sets/replaces the signed-in user's password, then records that this
+  // account has one via a direct client update -- same "direct client
+  // update, no RPC" pattern as equipped_theme/dismissRemoveAdsBanner below.
+  // No economic or contest impact if this flag is ever set without a real
+  // password having landed (it only gates a UI nag, nothing money- or
+  // fairness-adjacent), so it doesn't need the stricter server-side
+  // enforcement other profile columns get.
+  const setPassword = useCallback(
+    async (password) => {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) return { error };
+      const userId = session?.user?.id;
+      if (!userId) return { error: null };
+      const { data, error: profileError } = await supabase
+        .from("profiles")
+        .update({ has_password: true })
+        .eq("id", userId)
+        .select(PROFILE_COLUMNS)
+        .single();
+      if (!profileError) setProfile(data);
+      return { error: profileError };
+    },
+    [session?.user?.id]
   );
 
   const createProfile = useCallback(
@@ -188,8 +250,11 @@ export function useAuth() {
     profile,
     loading,
     sessionChecked,
-    sendCode,
+    signUpWithEmail,
+    requestSignInCode,
     verifyCode,
+    signInWithPassword,
+    setPassword,
     createProfile,
     checkUsernameAvailable,
     updateUsername,

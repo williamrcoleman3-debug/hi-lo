@@ -54,6 +54,13 @@ export function isAuthCallbackUrl(url) {
   return parsed.searchParams.has("code") || parsed.searchParams.has("token_hash");
 }
 
+// Fired on the auth-callback branch of appUrlOpen below -- lets a mounted
+// component (the Sign Up flow's Instructions screen, in AuthWidget) react
+// live to a confirmation-link tap while it's still on screen. Purely a UX
+// nicety: nothing in the actual sign-in flow depends on anyone listening
+// for this.
+export const EMAIL_LINK_CONFIRMED_EVENT = "hilo:email-link-confirmed";
+
 // Registers a listener for Universal Link opens, so a referral link tapped
 // while the iOS app is already installed attributes correctly. The app's
 // own WKWebView never carries a query string -- capacitor.config.json
@@ -69,16 +76,22 @@ export function isAuthCallbackUrl(url) {
 // third-party attribution SDK -- see setPendingReferral() below for that
 // path instead, wired up as the manual "Invite code" field in AuthWidget.
 //
-// Also handles the auth-callback case (see isAuthCallbackUrl above): rather
-// than re-implementing Supabase's token parsing here, hand the URL to the
-// WKWebView's own navigation so supabase-js's built-in session detection
-// does the real work on page load, exactly like it already does on the
-// website.
+// A previous version of this handler tried to complete the Supabase session
+// directly here, via `window.location.href = url` on the auth-callback
+// branch (see isAuthCallbackUrl above) -- appUrlOpen firing was confirmed
+// reliable on a real device, but completing the session that way was not,
+// and this can't be debugged live (no console access on this remote-build
+// setup). The auth flow (AuthWidget) no longer depends on a session ever
+// being established from this listener at all -- sign-in only ever happens
+// through the separate Sign In screen (6-digit code or password), which is
+// already proven to work. All this does for an auth-callback URL now is
+// notify anything listening (see EMAIL_LINK_CONFIRMED_EVENT above); it does
+// not touch storage or navigate anywhere.
 export function initReferralDeepLinkCapture() {
   if (!Capacitor.isNativePlatform()) return;
   App.addListener("appUrlOpen", ({ url }) => {
     if (isAuthCallbackUrl(url)) {
-      window.location.href = url;
+      window.dispatchEvent(new Event(EMAIL_LINK_CONFIRMED_EVENT));
       return;
     }
     const ref = parseRefFromUrl(url);

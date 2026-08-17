@@ -6,7 +6,8 @@ import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
 import { DEFAULT_AVATAR } from "../avatars/registry";
 import { IconFlame } from "./icons.jsx";
-import { peekPendingReferral, setPendingReferral } from "../referral/referral.js";
+import { peekPendingReferral, setPendingReferral, EMAIL_LINK_CONFIRMED_EVENT } from "../referral/referral.js";
+import { isValidPassword, passwordsMatch, PASSWORD_MIN_LENGTH } from "../auth/password.js";
 
 function Modal({ title, onClose, children }) {
   const C = useThemeTokens();
@@ -40,19 +41,29 @@ export function AuthWidget() {
     user,
     profile,
     loading,
-    sendCode,
+    signUpWithEmail,
+    requestSignInCode,
     verifyCode,
+    signInWithPassword,
+    setPassword,
     createProfile,
     checkUsernameAvailable,
     signOut,
   } = useAuth();
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState("email"); // "email" | "code" | null (mid-verify)
+  const [mode, setMode] = useState("signup"); // "signup" | "signin"
+  // Sign Up: "signup-email" | "signup-instructions"
+  // Sign In: "signin" (email + password-or-code choice) | "signin-code"
+  const [step, setStep] = useState("signup-email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [username, setUsername] = useState("");
   const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
   const [usernameSubmittable, setUsernameSubmittable] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
@@ -73,28 +84,80 @@ export function AuthWidget() {
     }
   }, [user, loading, profile]);
 
+  // Nice-to-have: while the Sign Up Instructions screen is showing, react
+  // live if the confirmation link gets tapped (see referral.js -- appUrlOpen
+  // dispatches this on the auth-callback branch, but deliberately no longer
+  // tries to establish a session itself, since that was confirmed unreliable
+  // on-device). Purely cosmetic -- the flow works fine with the static
+  // instructions text even if this never fires.
+  useEffect(() => {
+    if (step !== "signup-instructions") return;
+    const onConfirmed = () => setEmailConfirmed(true);
+    window.addEventListener(EMAIL_LINK_CONFIRMED_EVENT, onConfirmed);
+    return () => window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, onConfirmed);
+  }, [step]);
+
   if (!isSupabaseConfigured) return null;
 
   const reset = () => {
     setOpen(false);
-    setStep("email");
+    setStep("signup-email");
     setEmail("");
     setCode("");
+    setSignInPassword("");
+    setEmailConfirmed(false);
     setUsername("");
     setAvatar(DEFAULT_AVATAR);
     setUsernameSubmittable(false);
+    setNewPassword("");
+    setConfirmNewPassword("");
     setError(null);
     setInviteCode("");
   };
 
-  const handleSendCode = async (e) => {
+  const openSignUp = () => {
+    setMode("signup");
+    setStep("signup-email");
+    setError(null);
+    setOpen(true);
+  };
+
+  const openSignIn = () => {
+    setMode("signin");
+    setStep("signin");
+    setError(null);
+    setOpen(true);
+  };
+
+  const handleSignUpEmail = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await sendCode(email);
+    const { error } = await signUpWithEmail(email);
     setBusy(false);
     if (error) setError(error.message);
-    else setStep("code");
+    else setStep("signup-instructions");
+  };
+
+  const handleSignInWithPassword = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const { error } = await signInWithPassword(email, signInPassword);
+    setBusy(false);
+    // No step transition needed on success: signing in flips `user` truthy,
+    // and the post-auth branches below take over before this modal is ever
+    // reached again on the next render.
+    if (error) setError(error.message);
+  };
+
+  const handleRequestSignInCode = async () => {
+    setBusy(true);
+    setError(null);
+    const { error } = await requestSignInCode(email);
+    setBusy(false);
+    if (error) setError(error.message);
+    else setStep("signin-code");
   };
 
   const handleVerifyCode = async (e) => {
@@ -104,13 +167,9 @@ export function AuthWidget() {
     const { error } = await verifyCode(email, code);
     setBusy(false);
     if (error) setError(error.message);
-    // No step transition needed here: verifying flips `user` truthy, and the
-    // forced-username-modal branch below takes over once the profile fetch
-    // resolves. Just drop the code form so it doesn't linger in the meantime.
-    else setStep(null);
   };
 
-  const handleCreateUsername = async (e) => {
+  const handleCreateProfileAndPassword = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
@@ -118,37 +177,44 @@ export function AuthWidget() {
     // from scratch, or cleared -- into the pending-referral slot that
     // createProfile()/consumePendingReferral() reads right after this.
     setPendingReferral(inviteCode);
-    const { error } = await createProfile(username, avatar);
+    const { error: profileError } = await createProfile(username, avatar);
+    if (profileError) {
+      setBusy(false);
+      setError(profileError.message);
+      return;
+    }
+    const { error: passwordError } = await setPassword(newPassword);
+    setBusy(false);
+    // If this fails, the profile now exists (created just above) but
+    // profile.has_password is still false -- the next render falls straight
+    // into the dedicated "set a password to continue" modal below instead of
+    // this one, so there's nothing more to do here than surface the error.
+    if (passwordError) setError(passwordError.message);
+    else reset();
+  };
+
+  const handleSetPasswordOnly = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const { error } = await setPassword(newPassword);
     setBusy(false);
     if (error) setError(error.message);
     else reset();
   };
 
-  if (user && !loading && profile) {
-    return (
-      <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-        <span aria-hidden="true">{profile.avatar}</span>
-        <span style={{ color: C.textSecondary }}>{profile.username}</span>
-        {profile.current_streak > 0 && (
-          <span style={{ color: C.accent, ...FONT_TABULAR }} title={`${profile.current_streak}-day banking streak`}>
-<IconFlame />{profile.current_streak}
-          </span>
-        )}
-        <button onClick={() => signOut()} style={{ color: C.textMuted }} className="underline">
-          Sign out
-        </button>
-      </div>
-    );
-  }
+  const passwordFieldsValid = isValidPassword(newPassword) && passwordsMatch(newPassword, confirmNewPassword);
+  const passwordMismatch = newPassword.length > 0 && confirmNewPassword.length > 0 && !passwordsMatch(newPassword, confirmNewPassword);
 
   // Signed in, but no profile row yet — a modal, not an easy-to-miss corner
-  // form, so a fresh magic-link sign-in can't land the player on this step
-  // without noticing it.
+  // form, so a fresh sign-in can't land the player on this step without
+  // noticing it. Username, invite code, and password are all required
+  // together here — nobody finishes signup without a password anymore.
   if (user && !loading && !profile) {
-    const canSubmit = !busy && usernameSubmittable;
+    const canSubmit = !busy && usernameSubmittable && passwordFieldsValid;
     return (
       <Modal title="Welcome — set up your profile">
-        <form onSubmit={handleCreateUsername} className="flex flex-col gap-3">
+        <form onSubmit={handleCreateProfileAndPassword} className="flex flex-col gap-3">
           <UsernameField
             value={username}
             onChange={setUsername}
@@ -170,6 +236,43 @@ export function AuthWidget() {
               className="rounded-lg px-3 py-2 text-base"
               style={inputStyle}
             />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="new-password-field" className="text-xs" style={{ color: C.textMuted }}>
+              Password
+            </label>
+            <input
+              id="new-password-field"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={`at least ${PASSWORD_MIN_LENGTH} characters`}
+              minLength={PASSWORD_MIN_LENGTH}
+              required
+              className="rounded-lg px-3 py-2 text-base"
+              style={inputStyle}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="confirm-password-field" className="text-xs" style={{ color: C.textMuted }}>
+              Confirm password
+            </label>
+            <input
+              id="confirm-password-field"
+              type="password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              required
+              className="rounded-lg px-3 py-2 text-base"
+              style={inputStyle}
+            />
+            {passwordMismatch && (
+              <span className="text-xs" style={{ color: C.lose }}>
+                Passwords don't match.
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -201,76 +304,240 @@ export function AuthWidget() {
     );
   }
 
-  if (!open) {
+  // Signed in, has a profile, but from before passwords existed -- a
+  // one-time, non-skippable catch-up step so every account ends up with a
+  // password, without locking anyone out in the meantime.
+  if (user && !loading && profile && !profile.has_password) {
+    const canSubmit = !busy && passwordFieldsValid;
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg px-3 py-1.5 text-sm font-semibold"
-        style={{ border: `2px solid ${C.border}`, color: C.textPrimary, background: "transparent" }}
-      >
-        Sign in
-      </button>
+      <Modal title="Set a password to continue">
+        <form onSubmit={handleSetPasswordOnly} className="flex flex-col gap-3">
+          <p className="text-xs" style={{ color: C.textMuted }}>
+            We've added password sign-in — set one now to keep using your account.
+          </p>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder={`at least ${PASSWORD_MIN_LENGTH} characters`}
+            minLength={PASSWORD_MIN_LENGTH}
+            required
+            autoFocus
+            className="rounded-lg px-3 py-2 text-base"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+            placeholder="confirm password"
+            required
+            className="rounded-lg px-3 py-2 text-base"
+            style={inputStyle}
+          />
+          {passwordMismatch && (
+            <span className="text-xs" style={{ color: C.lose }}>
+              Passwords don't match.
+            </span>
+          )}
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            style={{ background: C.accent, color: C.cardInk }}
+          >
+            Save and continue
+          </button>
+          {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
+          <button
+            type="button"
+            onClick={() => signOut()}
+            style={{ color: C.textMuted }}
+            className="text-xs underline self-center"
+          >
+            sign out instead
+          </button>
+        </form>
+      </Modal>
+    );
+  }
+
+  if (user && !loading && profile) {
+    return (
+      <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+        <span aria-hidden="true">{profile.avatar}</span>
+        <span style={{ color: C.textSecondary }}>{profile.username}</span>
+        {profile.current_streak > 0 && (
+          <span style={{ color: C.accent, ...FONT_TABULAR }} title={`${profile.current_streak}-day banking streak`}>
+<IconFlame />{profile.current_streak}
+          </span>
+        )}
+        <button onClick={() => signOut()} style={{ color: C.textMuted }} className="underline">
+          Sign out
+        </button>
+      </div>
     );
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg px-3 py-1.5 text-sm font-semibold"
-        style={{ border: `2px solid ${C.border}`, color: C.textPrimary, background: "transparent" }}
-      >
-        Sign in
-      </button>
-      <Modal title="Sign in" onClose={reset}>
-        {step === "email" && (
-          <form onSubmit={handleSendCode} className="flex flex-col gap-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoFocus
-              className="rounded-lg px-3 py-2 text-base"
-              style={inputStyle}
-            />
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-lg px-3 py-2 text-sm font-semibold"
-              style={{ background: C.accent, color: C.cardInk }}
-            >
-              Send code
-            </button>
-          </form>
-        )}
-        {step === "code" && (
-          <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
-            <p style={{ color: C.textMuted }} className="text-xs">
-              Code sent to {email} — or click the magic link in that email instead.
-            </p>
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="6-digit code"
-              required
-              autoFocus
-              className="rounded-lg px-3 py-2 text-base"
-              style={inputStyle}
-            />
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-lg px-3 py-2 text-sm font-semibold"
-              style={{ background: C.accent, color: C.cardInk }}
-            >
-              Verify
-            </button>
-          </form>
-        )}
-        {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
-      </Modal>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={openSignUp}
+          className="rounded-lg px-3 py-1.5 text-sm font-semibold"
+          style={{ background: C.accent, color: C.cardInk }}
+        >
+          Sign up
+        </button>
+        <button
+          onClick={openSignIn}
+          className="rounded-lg px-3 py-1.5 text-sm font-semibold"
+          style={{ border: `2px solid ${C.border}`, color: C.textPrimary, background: "transparent" }}
+        >
+          Sign in
+        </button>
+      </div>
+
+      {open && (
+        <Modal title={mode === "signup" ? "Sign up" : "Sign in"} onClose={reset}>
+          {step === "signup-email" && (
+            <form onSubmit={handleSignUpEmail} className="flex flex-col gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoFocus
+                className="rounded-lg px-3 py-2 text-base"
+                style={inputStyle}
+              />
+              <button
+                type="submit"
+                disabled={busy}
+                className="rounded-lg px-3 py-2 text-sm font-semibold"
+                style={{ background: C.accent, color: C.cardInk }}
+              >
+                Send confirmation link
+              </button>
+              {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
+              <button
+                type="button"
+                onClick={openSignIn}
+                style={{ color: C.textMuted }}
+                className="text-xs underline self-center"
+              >
+                Already have an account? Sign in instead
+              </button>
+            </form>
+          )}
+
+          {step === "signup-instructions" && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm" style={{ color: C.textPrimary }}>
+                We sent a confirmation link to <strong>{email}</strong>.
+              </p>
+              {emailConfirmed ? (
+                <p className="text-sm" style={{ color: C.win }}>
+                  ✓ Confirmed — close this and tap Sign in to finish.
+                </p>
+              ) : (
+                <p className="text-xs" style={{ color: C.textMuted }}>
+                  Open your email, tap the link, then come back here and close this.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-lg px-3 py-2 text-sm font-semibold"
+                style={{ background: C.accent, color: C.cardInk }}
+              >
+                Close
+              </button>
+            </div>
+          )}
+
+          {step === "signin" && (
+            <form onSubmit={handleSignInWithPassword} className="flex flex-col gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoFocus
+                className="rounded-lg px-3 py-2 text-base"
+                style={inputStyle}
+              />
+              <input
+                type="password"
+                value={signInPassword}
+                onChange={(e) => setSignInPassword(e.target.value)}
+                placeholder="password"
+                className="rounded-lg px-3 py-2 text-base"
+                style={inputStyle}
+              />
+              <button
+                type="submit"
+                disabled={busy || !signInPassword}
+                className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                style={{ background: C.accent, color: C.cardInk }}
+              >
+                Sign in with password
+              </button>
+              <div className="flex items-center gap-2 text-xs" style={{ color: C.textMuted }}>
+                <span className="flex-1 h-px" style={{ background: C.border }} />
+                or
+                <span className="flex-1 h-px" style={{ background: C.border }} />
+              </div>
+              <button
+                type="button"
+                onClick={handleRequestSignInCode}
+                disabled={busy || !email}
+                className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                style={{ border: `2px solid ${C.border}`, color: C.textPrimary, background: "transparent" }}
+              >
+                Email me a one-time code
+              </button>
+              {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
+              <button
+                type="button"
+                onClick={openSignUp}
+                style={{ color: C.textMuted }}
+                className="text-xs underline self-center"
+              >
+                New here? Sign up instead
+              </button>
+            </form>
+          )}
+
+          {step === "signin-code" && (
+            <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
+              <p style={{ color: C.textMuted }} className="text-xs">
+                Code sent to {email} — or tap the magic link in that email instead.
+              </p>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="6-digit code"
+                required
+                autoFocus
+                className="rounded-lg px-3 py-2 text-base"
+                style={inputStyle}
+              />
+              <button
+                type="submit"
+                disabled={busy}
+                className="rounded-lg px-3 py-2 text-sm font-semibold"
+                style={{ background: C.accent, color: C.cardInk }}
+              >
+                Verify
+              </button>
+              {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
+            </form>
+          )}
+        </Modal>
+      )}
     </>
   );
 }

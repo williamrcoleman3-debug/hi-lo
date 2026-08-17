@@ -431,6 +431,12 @@ grant execute on function public.record_deck_progress(text, integer, boolean, bo
 -- locks this user's own row for the check, so a second concurrent call
 -- blocks until the first commits, then correctly sees referred_by already
 -- set and no-ops.
+--
+-- Also pays the REFERRED account a one-time +10 lifeline signup bonus on
+-- success — separate from, and not gated on, the referrer's own one-time
+-- reward (paid later, on the referred account's first completed game, by
+-- finalize_session). Guarded by the same v_already_referred / `for update`
+-- lock as referred_by itself, so it can never be granted twice.
 create function public.attribute_referral(p_referrer_username text) returns table (success boolean)
 language plpgsql
 security definer
@@ -461,6 +467,7 @@ begin
   end if;
 
   update public.profiles set referred_by = v_referrer_id where id = auth.uid();
+  update public.profiles set lifeline_balance = lifeline_balance + 10 where id = auth.uid();
   update public.profiles set referred_signups_count = referred_signups_count + 1 where id = v_referrer_id;
 
   return query select true;

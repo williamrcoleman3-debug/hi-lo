@@ -1,8 +1,19 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: vi.fn(() => false) },
+}));
+vi.mock("@capacitor/app", () => ({
+  App: { addListener: vi.fn() },
+}));
+
+import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 import {
   capturePendingReferral,
   consumePendingReferral,
   initReferralDeepLinkCapture,
+  isAuthCallbackUrl,
   peekPendingReferral,
   setPendingReferral,
 } from "./referral.js";
@@ -131,5 +142,94 @@ describe("initReferralDeepLinkCapture", () => {
   it("is a no-op on the web (not a native platform) -- never throws, never touches storage", () => {
     expect(() => initReferralDeepLinkCapture()).not.toThrow();
     expect(localStorage.getItem(PENDING_REFERRAL_KEY)).toBeNull();
+  });
+});
+
+describe("isAuthCallbackUrl", () => {
+  it("recognizes implicit-flow magic-link hash tokens", () => {
+    expect(
+      isAuthCallbackUrl("https://hi-lo-game.com/#access_token=abc&refresh_token=def&type=magiclink")
+    ).toBe(true);
+  });
+
+  it("recognizes an expired/invalid magic-link hash error", () => {
+    expect(
+      isAuthCallbackUrl("https://hi-lo-game.com/#error=access_denied&error_description=Email+link+is+invalid")
+    ).toBe(true);
+  });
+
+  it("recognizes a PKCE-style code query param", () => {
+    expect(isAuthCallbackUrl("https://hi-lo-game.com/?code=abc123")).toBe(true);
+  });
+
+  it("recognizes a token_hash query param", () => {
+    expect(isAuthCallbackUrl("https://hi-lo-game.com/?token_hash=abc123&type=magiclink")).toBe(true);
+  });
+
+  it("does not treat a referral link as an auth callback", () => {
+    expect(isAuthCallbackUrl("https://hi-lo-game.com/?ref=alice")).toBe(false);
+  });
+
+  it("does not treat a plain URL as an auth callback", () => {
+    expect(isAuthCallbackUrl("https://hi-lo-game.com/")).toBe(false);
+  });
+
+  it("returns false for an unparseable URL instead of throwing", () => {
+    expect(() => isAuthCallbackUrl("not a url")).not.toThrow();
+    expect(isAuthCallbackUrl("not a url")).toBe(false);
+  });
+});
+
+describe("initReferralDeepLinkCapture -- native platform", () => {
+  const originalLocation = window.location;
+
+  beforeEach(() => {
+    Capacitor.isNativePlatform.mockReturnValue(true);
+    App.addListener.mockClear();
+    Object.defineProperty(window, "location", {
+      writable: true,
+      configurable: true,
+      value: { href: "" },
+    });
+  });
+
+  afterEach(() => {
+    Capacitor.isNativePlatform.mockReturnValue(false);
+    Object.defineProperty(window, "location", {
+      writable: true,
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  function getRegisteredHandler() {
+    initReferralDeepLinkCapture();
+    expect(App.addListener).toHaveBeenCalledWith("appUrlOpen", expect.any(Function));
+    return App.addListener.mock.calls[0][1];
+  }
+
+  it("registers an appUrlOpen listener when running natively", () => {
+    initReferralDeepLinkCapture();
+    expect(App.addListener).toHaveBeenCalledWith("appUrlOpen", expect.any(Function));
+  });
+
+  it("captures the ref param for a referral-only link, without navigating away", () => {
+    const handler = getRegisteredHandler();
+
+    handler({ url: "https://hi-lo-game.com/?ref=alice" });
+
+    expect(localStorage.getItem(PENDING_REFERRAL_KEY)).toBe("alice");
+    expect(window.location.href).toBe("");
+  });
+
+  it("navigates the webview for an auth-callback link, leaving any pending referral untouched", () => {
+    localStorage.setItem(PENDING_REFERRAL_KEY, "bob");
+    const handler = getRegisteredHandler();
+    const authUrl = "https://hi-lo-game.com/#access_token=abc&type=magiclink";
+
+    handler({ url: authUrl });
+
+    expect(window.location.href).toBe(authUrl);
+    expect(localStorage.getItem(PENDING_REFERRAL_KEY)).toBe("bob");
   });
 });

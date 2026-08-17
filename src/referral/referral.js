@@ -22,6 +22,38 @@ export function capturePendingReferral() {
   if (ref) localStorage.setItem(PENDING_REFERRAL_KEY, ref);
 }
 
+// The AASA file matches every hi-lo-game.com URL ("/": "/*"), so a
+// Supabase magic-link email -- which also redirects to hi-lo-game.com,
+// via emailRedirectTo in useAuth.js's sendCode() -- opens the app through
+// this SAME Universal Link mechanism instead of loading in Safari.
+// appUrlOpen only ever hands the listener the URL as data; it never
+// actually navigates the WKWebView there, so supabase-js's own
+// detectSessionInUrl (which normally does the real session exchange when
+// a page loads with these params, exactly like it does on the website)
+// never gets a chance to run, and the login silently goes nowhere. This
+// tells the two cases apart so the auth case can be handled below.
+//
+// supabase-js is on its default flowType ("implicit" -- see
+// src/supabase/client.js, which doesn't override it), so a magic-link
+// redirect lands as hash-fragment tokens (#access_token=...&type=
+// magiclink, or #error=... for an expired/invalid link). code=/token_hash=
+// query params are also checked in case that ever changes (PKCE-style
+// flows use those instead). None of these ever appear on a referral link
+// (?ref=username, a plain query string with no hash) since emailRedirectTo
+// is fixed to window.location.origin with no ref param -- so this only
+// ever matches an actual Supabase redirect, never a referral tap.
+export function isAuthCallbackUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  const hashParams = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+  if (hashParams.has("access_token") || hashParams.has("error")) return true;
+  return parsed.searchParams.has("code") || parsed.searchParams.has("token_hash");
+}
+
 // Registers a listener for Universal Link opens, so a referral link tapped
 // while the iOS app is already installed attributes correctly. The app's
 // own WKWebView never carries a query string -- capacitor.config.json
@@ -36,9 +68,19 @@ export function capturePendingReferral() {
 // fresh -- nothing on iOS carries a value through that detour without a
 // third-party attribution SDK -- see setPendingReferral() below for that
 // path instead, wired up as the manual "Invite code" field in AuthWidget.
+//
+// Also handles the auth-callback case (see isAuthCallbackUrl above): rather
+// than re-implementing Supabase's token parsing here, hand the URL to the
+// WKWebView's own navigation so supabase-js's built-in session detection
+// does the real work on page load, exactly like it already does on the
+// website.
 export function initReferralDeepLinkCapture() {
   if (!Capacitor.isNativePlatform()) return;
   App.addListener("appUrlOpen", ({ url }) => {
+    if (isAuthCallbackUrl(url)) {
+      window.location.href = url;
+      return;
+    }
     const ref = parseRefFromUrl(url);
     if (ref) localStorage.setItem(PENDING_REFERRAL_KEY, ref);
   });

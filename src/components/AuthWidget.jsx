@@ -140,11 +140,14 @@ export function AuthWidget() {
     else setStep("signup-instructions");
   };
 
-  // Apple Guideline 2.1a: a previous version of this flow tried to complete
-  // a session directly from the confirmation-link tap, which doesn't
-  // reliably work in this WKWebView (see referral.js). This is the actual
-  // gate now -- an explicit tap, checked against the database, with a
-  // retry that doesn't lose anything if the answer is "not yet."
+  // Apple Guideline 2.1a fallback path: if tapping the confirmation link
+  // didn't establish a session directly (see referral.js's
+  // exchangeCodeForSession call -- two earlier, different approaches at
+  // completing the session from the link tap were confirmed unreliable on
+  // this WKWebView, so this manual path always has to keep working
+  // regardless), this button re-checks confirmation status explicitly
+  // against the database, with a retry that doesn't lose anything if the
+  // answer is "not yet."
   const handleConfirmEmailTapped = async () => {
     setBusy(true);
     setError(null);

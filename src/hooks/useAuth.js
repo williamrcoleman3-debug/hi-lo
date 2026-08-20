@@ -63,11 +63,15 @@ export function useAuth() {
   // yet, and sends the confirmation email (which carries both a magic link
   // and the same 8-digit code used everywhere else in this file). See
   // AuthWidget's Sign Up flow: this is followed by a static Instructions
-  // screen, not the code-entry step -- completing a session directly from
-  // the confirmation-link tap was tried and confirmed unreliable on-device
-  // (see src/referral/referral.js), so Sign Up no longer tries to establish
-  // a session at all. The account only ever actually signs in later,
-  // through Sign In below.
+  // screen, not the code-entry step. Tapping the magic link CAN establish a
+  // session directly now, via exchangeCodeForSession() in
+  // src/referral/referral.js's appUrlOpen handler -- but two earlier,
+  // different approaches at that were confirmed unreliable on-device, so
+  // signUpWithEmail itself still makes no assumption a session will ever
+  // arrive that way. The Instructions screen's "I confirmed my email"
+  // button (checkEmailConfirmed + requestSignInCode + verifyCode, below)
+  // is what actually completes sign-up if the instant path doesn't land --
+  // keep that path working regardless of whether the instant one does.
   const signUpWithEmail = useCallback(
     (email) =>
       supabase.auth.signInWithOtp({

@@ -6,9 +6,13 @@ vi.mock("@capacitor/core", () => ({
 vi.mock("@capacitor/app", () => ({
   App: { addListener: vi.fn() },
 }));
+vi.mock("../supabase/client.js", () => ({
+  supabase: { auth: { exchangeCodeForSession: vi.fn(() => Promise.resolve({ error: null })) } },
+}));
 
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { supabase } from "../supabase/client.js";
 import {
   capturePendingReferral,
   consumePendingReferral,
@@ -185,6 +189,8 @@ describe("initReferralDeepLinkCapture -- native platform", () => {
   beforeEach(() => {
     Capacitor.isNativePlatform.mockReturnValue(true);
     App.addListener.mockClear();
+    supabase.auth.exchangeCodeForSession.mockClear();
+    supabase.auth.exchangeCodeForSession.mockResolvedValue({ error: null });
   });
 
   afterEach(() => {
@@ -214,7 +220,7 @@ describe("initReferralDeepLinkCapture -- native platform", () => {
     window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
   });
 
-  it("dispatches the confirm event for an auth-callback link, leaving any pending referral untouched and never navigating", () => {
+  it("dispatches the confirm event for a hash-token auth-callback link, leaving any pending referral untouched and never navigating", () => {
     localStorage.setItem(PENDING_REFERRAL_KEY, "bob");
     const handler = getRegisteredHandler();
     const listener = vi.fn();
@@ -224,8 +230,35 @@ describe("initReferralDeepLinkCapture -- native platform", () => {
     handler({ url: "https://hi-lo-game.com/#access_token=abc&type=magiclink" });
 
     expect(listener).toHaveBeenCalledTimes(1);
+    expect(supabase.auth.exchangeCodeForSession).not.toHaveBeenCalled();
     expect(localStorage.getItem(PENDING_REFERRAL_KEY)).toBe("bob");
     expect(window.location.href).toBe(originalHref);
+    window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
+  });
+
+  it("exchanges a PKCE code for a session on a code-bearing auth-callback link, then dispatches the confirm event", async () => {
+    const handler = getRegisteredHandler();
+    const listener = vi.fn();
+    window.addEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
+
+    handler({ url: "https://hi-lo-game.com/?code=abc123" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(supabase.auth.exchangeCodeForSession).toHaveBeenCalledWith("abc123");
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
+  });
+
+  it("still dispatches the confirm event even if the code exchange fails, without throwing", async () => {
+    supabase.auth.exchangeCodeForSession.mockResolvedValue({ error: { message: "expired" } });
+    const handler = getRegisteredHandler();
+    const listener = vi.fn();
+    window.addEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
+
+    expect(() => handler({ url: "https://hi-lo-game.com/?code=stale" })).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(listener).toHaveBeenCalledTimes(1);
     window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, listener);
   });
 });

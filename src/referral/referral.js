@@ -1,5 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { supabase } from "../supabase/client.js";
 
 const PENDING_REFERRAL_KEY = "hilo:pendingReferral";
 
@@ -30,18 +31,24 @@ export function capturePendingReferral() {
 // actually navigates the WKWebView there, so supabase-js's own
 // detectSessionInUrl (which normally does the real session exchange when
 // a page loads with these params, exactly like it does on the website)
-// never gets a chance to run, and the login silently goes nowhere. This
-// tells the two cases apart so the auth case can be handled below.
+// never gets a chance to run. This tells the two cases apart so the auth
+// case can be handled below.
 //
-// supabase-js is on its default flowType ("implicit" -- see
-// src/supabase/client.js, which doesn't override it), so a magic-link
-// redirect lands as hash-fragment tokens (#access_token=...&type=
-// magiclink, or #error=... for an expired/invalid link). code=/token_hash=
-// query params are also checked in case that ever changes (PKCE-style
-// flows use those instead). None of these ever appear on a referral link
-// (?ref=username, a plain query string with no hash) since emailRedirectTo
-// is fixed to window.location.origin with no ref param -- so this only
-// ever matches an actual Supabase redirect, never a referral tap.
+// supabase-js is on flowType "pkce" (see src/supabase/client.js), so a
+// magic-link redirect lands as a plain ?code=... query param rather than
+// #access_token=... hash tokens. That's what makes completeAuthCallback()
+// below possible at all: a code string can be exchanged for a session with
+// a direct network call (supabase.auth.exchangeCodeForSession), no page
+// load required -- unlike hash tokens, which had no equivalent "apply
+// these manually" API and needed detectSessionInUrl's page-load hook to
+// ever get consumed. Hash tokens (#access_token=.../#error=...) and
+// token_hash= are still recognized by isAuthCallbackUrl below, both as a
+// defensive fallback and because expired/invalid links surface as
+// #error=... even under PKCE. None of these ever appear on a referral
+// link (?ref=username, a plain query string with no hash) since
+// emailRedirectTo is fixed to window.location.origin with no ref param --
+// so this only ever matches an actual Supabase redirect, never a referral
+// tap.
 export function isAuthCallbackUrl(url) {
   let parsed;
   try {
@@ -79,19 +86,44 @@ export const EMAIL_LINK_CONFIRMED_EVENT = "hilo:email-link-confirmed";
 // A previous version of this handler tried to complete the Supabase session
 // directly here, via `window.location.href = url` on the auth-callback
 // branch (see isAuthCallbackUrl above) -- appUrlOpen firing was confirmed
-// reliable on a real device, but completing the session that way was not,
-// and this can't be debugged live (no console access on this remote-build
-// setup). The auth flow (AuthWidget) no longer depends on a session ever
-// being established from this listener at all -- sign-in only ever happens
-// through the separate Sign In screen (8-digit code or password), which is
-// already proven to work. All this does for an auth-callback URL now is
-// notify anything listening (see EMAIL_LINK_CONFIRMED_EVENT above); it does
-// not touch storage or navigate anywhere.
+// reliable on a real device, but that approach relied on forcing a page
+// navigation so the implicit flow's detectSessionInUrl would pick up the
+// hash tokens, and that navigation was not reliable, and this couldn't be
+// debugged live (no console access on this remote-build setup).
+//
+// exchangeCodeForSession() (below) is a different mechanism, not a retry of
+// that same approach -- it needs no navigation at all, just the code string,
+// so it isn't exposed to whatever made the navigation-based attempt
+// unreliable. If it fails for any reason (expired code, the code's
+// PKCE verifier missing from local storage -- e.g. a different
+// device/browser than the one that requested the email, storage cleared
+// between request and tap -- or any other exchange error), this only logs
+// and falls through to dispatching EMAIL_LINK_CONFIRMED_EVENT same as
+// before: no session gets set, so AuthWidget's existing "I confirmed my
+// email" -> code-screen path (which never depended on this listener) is
+// still exactly how sign-up finishes. That path is the safety net, not a
+// leftover -- keep it working unchanged.
+async function completeAuthCallback(url) {
+  const parsed = new URL(url);
+  const code = parsed.searchParams.get("code");
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) console.error("exchangeCodeForSession failed:", error.message);
+  }
+  // Fires whether the exchange above succeeded, failed, or never ran (a
+  // hash-token/error link) -- AuthWidget's Instructions screen only uses
+  // this for a cosmetic live-update ("Confirmed -- tap below to continue"),
+  // and a session having just been established makes that screen unmount
+  // anyway (see AuthWidget's `user && !loading && !profile` branch, which
+  // takes over on its own the moment `session` changes).
+  window.dispatchEvent(new Event(EMAIL_LINK_CONFIRMED_EVENT));
+}
+
 export function initReferralDeepLinkCapture() {
   if (!Capacitor.isNativePlatform()) return;
   App.addListener("appUrlOpen", ({ url }) => {
     if (isAuthCallbackUrl(url)) {
-      window.dispatchEvent(new Event(EMAIL_LINK_CONFIRMED_EVENT));
+      completeAuthCallback(url);
       return;
     }
     const ref = parseRefFromUrl(url);

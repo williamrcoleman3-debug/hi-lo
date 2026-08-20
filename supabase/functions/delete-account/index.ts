@@ -39,7 +39,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // for.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
 };
 
 function jsonResponse(body, status = 200) {

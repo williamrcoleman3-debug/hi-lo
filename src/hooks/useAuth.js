@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../supabase/client.js";
 import { consumePendingReferral } from "../referral/referral.js";
-import { diagLog } from "../diag.js"; // TEMPORARY -- see src/diag.js
 
 const PROFILE_COLUMNS =
   "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed";
@@ -27,14 +26,10 @@ export function useAuth() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     supabase.auth.getSession().then(({ data }) => {
-      diagLog(`getSession resolved hasSession=${!!data.session}`); // TEMPORARY
       setSession(data.session);
       setSessionChecked(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
-      diagLog(`onAuthStateChange event=${event} hasSession=${!!sess}`); // TEMPORARY
-      setSession(sess);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => setSession(sess));
     return () => sub.subscription.unsubscribe();
   }, []);
 

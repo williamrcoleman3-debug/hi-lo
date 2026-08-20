@@ -8,7 +8,6 @@ import { DEFAULT_AVATAR } from "../avatars/registry";
 import { IconFlame } from "./icons.jsx";
 import { peekPendingReferral, setPendingReferral, EMAIL_LINK_CONFIRMED_EVENT } from "../referral/referral.js";
 import { isValidPassword, passwordsMatch, PASSWORD_MIN_LENGTH } from "../auth/password.js";
-import { diagLog } from "../diag.js"; // TEMPORARY -- see src/diag.js
 
 function Modal({ title, onClose, children }) {
   const C = useThemeTokens();
@@ -94,21 +93,10 @@ export function AuthWidget() {
   // instructions text even if this never fires.
   useEffect(() => {
     if (step !== "signup-instructions") return;
-    const onConfirmed = () => {
-      diagLog("EMAIL_LINK_CONFIRMED_EVENT received by AuthWidget"); // TEMPORARY
-      setEmailConfirmed(true);
-    };
+    const onConfirmed = () => setEmailConfirmed(true);
     window.addEventListener(EMAIL_LINK_CONFIRMED_EVENT, onConfirmed);
     return () => window.removeEventListener(EMAIL_LINK_CONFIRMED_EVENT, onConfirmed);
   }, [step]);
-
-  // TEMPORARY -- see src/diag.js. Traces exactly what state AuthWidget is
-  // rendering off of, to see whether a session is actually landing (user
-  // truthy) while something still shows the code screen, or whether no
-  // session ever lands at all.
-  useEffect(() => {
-    diagLog(`AuthWidget render state: user=${!!user} loading=${loading} profile=${!!profile} step=${step}`);
-  }, [user, loading, profile, step]);
 
   if (!isSupabaseConfigured) return null;
 
@@ -161,7 +149,6 @@ export function AuthWidget() {
   // against the database, with a retry that doesn't lose anything if the
   // answer is "not yet."
   const handleConfirmEmailTapped = async () => {
-    diagLog("handleConfirmEmailTapped invoked -- this only ever fires from the button's onClick"); // TEMPORARY
     setBusy(true);
     setError(null);
     const { confirmed, error: checkError } = await checkEmailConfirmed(email);

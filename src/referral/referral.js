@@ -1,7 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { supabase } from "../supabase/client.js";
-import { diagLog } from "../diag.js"; // TEMPORARY -- see src/diag.js
 
 const PENDING_REFERRAL_KEY = "hilo:pendingReferral";
 
@@ -107,16 +106,9 @@ export const EMAIL_LINK_CONFIRMED_EVENT = "hilo:email-link-confirmed";
 async function completeAuthCallback(url) {
   const parsed = new URL(url);
   const code = parsed.searchParams.get("code");
-  diagLog(`appUrlOpen auth-callback, hasCode=${!!code}`); // TEMPORARY
   if (code) {
-    diagLog("calling exchangeCodeForSession"); // TEMPORARY
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      diagLog(`exchange FAILED: ${error.message}`); // TEMPORARY
-      console.error("exchangeCodeForSession failed:", error.message);
-    } else {
-      diagLog(`exchange OK, hasSession=${!!data?.session}`); // TEMPORARY
-    }
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) console.error("exchangeCodeForSession failed:", error.message);
   }
   // Fires whether the exchange above succeeded, failed, or never ran (a
   // hash-token/error link) -- AuthWidget's Instructions screen only uses
@@ -124,7 +116,6 @@ async function completeAuthCallback(url) {
   // and a session having just been established makes that screen unmount
   // anyway (see AuthWidget's `user && !loading && !profile` branch, which
   // takes over on its own the moment `session` changes).
-  diagLog("dispatching EMAIL_LINK_CONFIRMED_EVENT"); // TEMPORARY
   window.dispatchEvent(new Event(EMAIL_LINK_CONFIRMED_EVENT));
 }
 

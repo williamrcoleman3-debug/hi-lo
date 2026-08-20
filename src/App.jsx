@@ -11,6 +11,7 @@ import { SiteBanner } from "./components/SiteBanner";
 import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay";
 import { GameScreen } from "./components/GameScreen";
 import { Footer } from "./components/Footer";
+import { DiagOverlay } from "./components/DiagOverlay.jsx"; // TEMPORARY -- see src/diag.js
 import { initPurchases } from "./iap/purchases.js";
 
 // Every tab besides Game is code-split -- its chunk is only fetched the
@@ -105,6 +106,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
+      <DiagOverlay />
       <AppShell
         userId={userId}
         profile={profile}

@@ -98,6 +98,18 @@ export function useAuth() {
     return { error };
   }, []);
 
+  // Backs the Sign Up flow's "I confirmed my email" button -- there's no
+  // session yet at that point (signUpWithEmail never establishes one), so
+  // this has to ask the database directly via a public RPC rather than
+  // reading anything off the current auth state. See schema.sql's
+  // is_email_confirmed() for why the result is collapsed to a bare
+  // boolean.
+  const checkEmailConfirmed = useCallback(async (email) => {
+    const { data, error } = await supabase.rpc("is_email_confirmed", { p_email: email });
+    if (error) return { confirmed: false, error };
+    return { confirmed: !!data, error: null };
+  }, []);
+
   const verifyCode = useCallback(
     (email, token) => supabase.auth.verifyOtp({ email, token, type: "email" }),
     []
@@ -234,6 +246,7 @@ export function useAuth() {
     sessionChecked,
     signUpWithEmail,
     requestSignInCode,
+    checkEmailConfirmed,
     verifyCode,
     signInWithPassword,
     setPassword,

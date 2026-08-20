@@ -21,6 +21,9 @@ const LeaderboardScreen = lazy(() =>
   import("./components/LeaderboardScreen").then((m) => ({ default: m.LeaderboardScreen }))
 );
 const UnlocksScreen = lazy(() => import("./components/UnlocksScreen").then((m) => ({ default: m.UnlocksScreen })));
+const DeleteAccountScreen = lazy(() =>
+  import("./components/DeleteAccountScreen").then((m) => ({ default: m.DeleteAccountScreen }))
+);
 const StatsScreen = lazy(() => import("./components/StatsScreen").then((m) => ({ default: m.StatsScreen })));
 const ReferralScreen = lazy(() => import("./components/ReferralScreen").then((m) => ({ default: m.ReferralScreen })));
 const LifelinesScreen = lazy(() =>
@@ -69,6 +72,7 @@ export default function App() {
     updateUsername,
     updateAvatar,
     dismissRemoveAdsBanner,
+    signOut,
   } = useAuth();
   const userId = user?.id ?? null;
   const {
@@ -110,6 +114,7 @@ export default function App() {
         updateUsername={updateUsername}
         updateAvatar={updateAvatar}
         dismissRemoveAdsBanner={dismissRemoveAdsBanner}
+        signOut={signOut}
         selectedDeckConfig={selectedDeckConfig}
         unlockedDecks={unlockedDecks}
         deckProgress={deckProgress}
@@ -133,6 +138,7 @@ function AppShell({
   updateUsername,
   updateAvatar,
   dismissRemoveAdsBanner,
+  signOut,
   selectedDeckConfig,
   unlockedDecks,
   deckProgress,
@@ -213,6 +219,14 @@ function AppShell({
               gameMode={gameMode}
               setGameMode={setGameMode}
             />
+          </div>
+        )}
+        {openedTabs.has("delete-account") && (
+          <div
+            className="w-full flex flex-col items-center"
+            style={{ display: tab === "delete-account" ? "flex" : "none" }}
+          >
+            <DeleteAccountScreen userId={userId} signOut={signOut} />
           </div>
         )}
         {openedTabs.has("stats") && (

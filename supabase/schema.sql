@@ -477,6 +477,43 @@ $$;
 revoke all on function public.attribute_referral(text) from public, anon, authenticated;
 grant execute on function public.attribute_referral(text) to authenticated;
 
+-- Lets the Sign Up flow (AuthWidget's Instructions screen) ask "has this
+-- email actually been confirmed yet?" without establishing a session --
+-- see useAuth.js's signUpWithEmail, which deliberately never tries to
+-- complete a session from the confirmation-link tap itself (confirmed
+-- unreliable on-device, see referral.js). There is no session at this
+-- point (auth.uid() is null), so this can't be gated the way
+-- attribute_referral is -- it has to be callable by the anon role, keyed
+-- on the plain email address instead.
+--
+-- Returns a bare boolean, nothing else -- deliberately the same false for
+-- "no account with this email" and "account exists but not confirmed yet,"
+-- so a caller can't use this to enumerate which emails have accounts, only
+-- whether a specific given email is confirmed. There is no rate limiting
+-- on this function -- check_rate_limit() requires auth.uid(), which isn't
+-- available pre-session, so it can't be reused here. Flagged as a known,
+-- accepted gap for now: worst case is an unauthenticated caller batch-
+-- checking guessed emails' confirmation status, which reveals account
+-- existence one bit at a time but touches no game/contest/money state.
+create or replace function public.is_email_confirmed(p_email text) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_confirmed boolean;
+begin
+  select (email_confirmed_at is not null) into v_confirmed
+    from auth.users
+   where lower(email) = lower(p_email)
+   limit 1;
+  return coalesce(v_confirmed, false);
+end;
+$$;
+
+revoke all on function public.is_email_confirmed(text) from public, authenticated;
+grant execute on function public.is_email_confirmed(text) to anon, authenticated;
+
 -- Redeems 10,000 spendable_tokens for one lifeline. spendable_tokens is a
 -- separate pool from the permanent Total Token Score record
 -- (leaderboard_scores.cumulative_banked), which this never touches.

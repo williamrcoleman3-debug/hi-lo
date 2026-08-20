@@ -8,6 +8,7 @@ const LEADERBOARD_TAB = { id: "leaderboard", label: "Leaderboard" };
 // tabs should default in here rather than growing the primary row.
 const BASE_OVERFLOW_TABS = [
   { id: "unlocks", label: "Unlocks" },
+  { id: "delete-account", label: "Delete Account" },
   { id: "stats", label: "Stats" },
   { id: "referrals", label: "Referrals" },
   { id: "lifelines", label: "Lifelines" },

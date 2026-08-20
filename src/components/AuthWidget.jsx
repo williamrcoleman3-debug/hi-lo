@@ -43,6 +43,7 @@ export function AuthWidget() {
     loading,
     signUpWithEmail,
     requestSignInCode,
+    checkEmailConfirmed,
     verifyCode,
     signInWithPassword,
     setPassword,
@@ -52,7 +53,7 @@ export function AuthWidget() {
   } = useAuth();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("signup"); // "signup" | "signin"
-  // Sign Up: "signup-email" | "signup-instructions"
+  // Sign Up: "signup-email" | "signup-instructions" | "signup-code"
   // Sign In: "signin" (email + password-or-code choice) | "signin-code"
   const [step, setStep] = useState("signup-email");
   const [email, setEmail] = useState("");
@@ -137,6 +138,39 @@ export function AuthWidget() {
     setBusy(false);
     if (error) setError(error.message);
     else setStep("signup-instructions");
+  };
+
+  // Apple Guideline 2.1a: a previous version of this flow tried to complete
+  // a session directly from the confirmation-link tap, which doesn't
+  // reliably work in this WKWebView (see referral.js). This is the actual
+  // gate now -- an explicit tap, checked against the database, with a
+  // retry that doesn't lose anything if the answer is "not yet."
+  const handleConfirmEmailTapped = async () => {
+    setBusy(true);
+    setError(null);
+    const { confirmed, error: checkError } = await checkEmailConfirmed(email);
+    if (checkError) {
+      setBusy(false);
+      setError("Couldn't check confirmation status — try again.");
+      return;
+    }
+    if (!confirmed) {
+      setBusy(false);
+      setError("Not confirmed yet — check your email and tap the link, then try again.");
+      return;
+    }
+    // The account exists and is confirmed now, but there's still no
+    // session -- request a fresh code rather than trust the original
+    // signup code is still valid post-confirmation. shouldCreateUser:
+    // false is fine here since confirmation already proved the account
+    // exists.
+    const { error: codeError } = await requestSignInCode(email);
+    setBusy(false);
+    if (codeError) {
+      setError(codeError.message);
+      return;
+    }
+    setStep("signup-code");
   };
 
   const handleSignInWithPassword = async (e) => {
@@ -370,22 +404,51 @@ export function AuthWidget() {
               </p>
               {emailConfirmed ? (
                 <p className="text-sm" style={{ color: C.win }}>
-                  ✓ Confirmed — close this and tap Sign in to finish.
+                  ✓ Confirmed — tap below to continue.
                 </p>
               ) : (
                 <p className="text-xs" style={{ color: C.textMuted }}>
-                  Open your email, tap the link, then come back here and close this.
+                  Open your email, tap the link, then come back here.
                 </p>
               )}
               <button
                 type="button"
-                onClick={reset}
+                onClick={handleConfirmEmailTapped}
+                disabled={busy}
+                className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                style={{ background: C.accent, color: C.cardInk }}
+              >
+                {busy ? "…" : "I confirmed my email"}
+              </button>
+              {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
+            </div>
+          )}
+
+          {step === "signup-code" && (
+            <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
+              <p style={{ color: C.textMuted }} className="text-xs">
+                Enter the 8-digit code we just sent to {email}.
+              </p>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="8-digit code"
+                maxLength={8}
+                required
+                autoFocus
+                className="rounded-lg px-3 py-2 text-base"
+                style={inputStyle}
+              />
+              <button
+                type="submit"
+                disabled={busy}
                 className="rounded-lg px-3 py-2 text-sm font-semibold"
                 style={{ background: C.accent, color: C.cardInk }}
               >
-                Close
+                Verify
               </button>
-            </div>
+              {error && <span style={{ color: C.lose }} className="text-xs">{error}</span>}
+            </form>
           )}
 
           {step === "signin" && (

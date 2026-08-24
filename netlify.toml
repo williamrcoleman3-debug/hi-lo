@@ -17,3 +17,33 @@
   for = "/.well-known/apple-app-site-association"
   [headers.values]
     Content-Type = "application/json"
+
+# The iOS app's WKWebView loads this live URL directly (server.url in
+# capacitor.config.json) instead of bundling a copy into the binary, so a
+# device needs to always revalidate index.html rather than ever hold onto
+# a stale copy indefinitely. Netlify's own default already sends
+# max-age=0,must-revalidate here (confirmed live), so this is pinning that
+# behavior explicitly in the repo rather than relying on an unstated
+# platform default. Deliberately does NOT cover /assets/* below -- those
+# are the actual opposite case.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Vite content-hashes every JS/CSS bundle filename (see index.html's
+# <script>/<link> tags), so a changed file is always a new URL -- safe to
+# cache for a full year. Confirmed live that Netlify's default was NOT
+# already doing this (same max-age=0,must-revalidate as index.html on
+# every asset request) -- this is the real gap this investigation found,
+# just not the one suspected: assets were being needlessly re-validated on
+# every load, not staying stale.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

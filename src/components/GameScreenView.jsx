@@ -200,7 +200,7 @@ export function GameScreenView({
               )}
             </div>
 
-            <div className="text-xs uppercase tracking-widest mb-3 text-center" style={{ color: C.textMuted }}>
+            <div className="text-xs tracking-widest mb-3 text-center" style={{ color: C.textSecondary }}>
               <span style={FONT_TABULAR}>{cardsLeft}</span> cards left in the shoe · ante{" "}
               <span style={FONT_TABULAR}>{selectedDeckConfig.ante.toLocaleString()}</span>
             </div>
@@ -424,7 +424,7 @@ export function GameScreenView({
         <div className="w-[320px] max-w-full h-[100px]" />
       </div>
 
-      <p className="hidden sm:block max-w-4xl text-xs mt-8 text-center leading-relaxed" style={{ color: C.textMuted }}>
+      <p className="hidden sm:block max-w-[65ch] text-xs mt-8 text-center leading-relaxed" style={{ color: C.textMuted }}>
         Rules: guess whether the next card ranks higher, lower, or the same as the card shown — or skip rank
         entirely and call its color, red or black. Aces are high. Every call is priced off a fresh, full
         shoe for that rank — the price doesn't shrink as matching cards run out, so if you're tracking

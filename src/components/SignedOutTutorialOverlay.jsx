@@ -29,7 +29,7 @@ const PAGES = [
           No purchase necessary. Free to play, free to win.
         </p>
 
-        <p className="text-xs" style={{ color: C.textMuted }}>
+        <p className="text-xs" style={{ color: C.textSecondary }}>
           Must be 18+ and located in the United States. Void in New York and Rhode Island.
         </p>
       </div>

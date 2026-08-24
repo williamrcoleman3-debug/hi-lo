@@ -64,10 +64,19 @@ export default function App() {
   }, []);
 
   const {
+    isSupabaseConfigured,
     user,
     profile,
+    loading,
     refreshProfile,
     sessionChecked,
+    signUpWithEmail,
+    requestSignInCode,
+    checkEmailConfirmed,
+    verifyCode,
+    signInWithPassword,
+    setPassword,
+    createProfile,
     checkUsernameAvailable,
     updateUsername,
     updateAvatar,
@@ -106,10 +115,20 @@ export default function App() {
   return (
     <ThemeProvider>
       <AppShell
+        isSupabaseConfigured={isSupabaseConfigured}
         userId={userId}
+        user={user}
         profile={profile}
+        loading={loading}
         refreshProfile={refreshProfile}
         sessionChecked={sessionChecked}
+        signUpWithEmail={signUpWithEmail}
+        requestSignInCode={requestSignInCode}
+        checkEmailConfirmed={checkEmailConfirmed}
+        verifyCode={verifyCode}
+        signInWithPassword={signInWithPassword}
+        setPassword={setPassword}
+        createProfile={createProfile}
         checkUsernameAvailable={checkUsernameAvailable}
         updateUsername={updateUsername}
         updateAvatar={updateAvatar}
@@ -130,10 +149,20 @@ export default function App() {
 }
 
 function AppShell({
+  isSupabaseConfigured,
   userId,
+  user,
   profile,
+  loading,
   refreshProfile,
   sessionChecked,
+  signUpWithEmail,
+  requestSignInCode,
+  checkEmailConfirmed,
+  verifyCode,
+  signInWithPassword,
+  setPassword,
+  createProfile,
   checkUsernameAvailable,
   updateUsername,
   updateAvatar,
@@ -170,7 +199,21 @@ function AppShell({
     >
       <div className="w-full max-w-4xl flex items-center justify-between mb-6">
         <TabNav active={tab} onChange={goToTab} />
-        <AuthWidget />
+        <AuthWidget
+          isSupabaseConfigured={isSupabaseConfigured}
+          user={user}
+          profile={profile}
+          loading={loading}
+          signUpWithEmail={signUpWithEmail}
+          requestSignInCode={requestSignInCode}
+          checkEmailConfirmed={checkEmailConfirmed}
+          verifyCode={verifyCode}
+          signInWithPassword={signInWithPassword}
+          setPassword={setPassword}
+          createProfile={createProfile}
+          checkUsernameAvailable={checkUsernameAvailable}
+          signOut={signOut}
+        />
       </div>
       {userId ? (
         <SiteBanner messages={messages} />

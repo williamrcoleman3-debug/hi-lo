@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
-import { useAuth } from "../hooks/useAuth";
 import { AvatarPicker } from "./AvatarPicker";
 import { UsernameField } from "./UsernameField";
 import { DEFAULT_AVATAR } from "../avatars/registry";
@@ -33,24 +32,34 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-export function AuthWidget() {
+// Receives auth state and every auth action as props from App() rather
+// than calling useAuth() itself -- App() is the single source of truth
+// (see the comment at the top of App.jsx), and a second independent
+// useAuth() call here used to mean a second, unconnected copy of
+// session/profile state: createProfile() (etc.) would update only this
+// component's own local copy via its own setProfile, while everything
+// else fed from App's copy (Unlocks, Game, Referrals, ...) never learned
+// anything had changed until a full page reload remounted everything from
+// scratch. Fixed by sharing the one instance instead of patching this
+// screen alone, since the same class of bug was possible anywhere else
+// a second useAuth() call might get added.
+export function AuthWidget({
+  isSupabaseConfigured,
+  user,
+  profile,
+  loading,
+  signUpWithEmail,
+  requestSignInCode,
+  checkEmailConfirmed,
+  verifyCode,
+  signInWithPassword,
+  setPassword,
+  createProfile,
+  checkUsernameAvailable,
+  signOut,
+}) {
   const C = useThemeTokens();
   const inputStyle = { border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary };
-  const {
-    isSupabaseConfigured,
-    user,
-    profile,
-    loading,
-    signUpWithEmail,
-    requestSignInCode,
-    checkEmailConfirmed,
-    verifyCode,
-    signInWithPassword,
-    setPassword,
-    createProfile,
-    checkUsernameAvailable,
-    signOut,
-  } = useAuth();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("signup"); // "signup" | "signin"
   // Sign Up: "signup-email" | "signup-instructions" | "signup-code"

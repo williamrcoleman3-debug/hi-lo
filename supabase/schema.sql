@@ -1776,6 +1776,14 @@ begin
          updated_at = now()
    where id = p_session_id;
 
+  -- Account-wide (all decks) completed-game count, distinct from
+  -- deck_progress.games_played below which is per-deck -- see its
+  -- column comment, in the "REMOVE ADS + AD SYSTEM" section further down
+  -- this file, for why it exists. Incremented here unconditionally
+  -- (bust or bank both count, same as games_played) since this is the
+  -- one path every game end already goes through.
+  update public.profiles set games_completed = games_completed + 1 where id = v_session.user_id;
+
   select peak_score into v_prev_peak
     from public.leaderboard_scores
    where user_id = v_session.user_id and deck_id = v_session.deck_id;
@@ -2153,6 +2161,16 @@ revoke all on function public.find_sessions_for_review(text) from public, anon, 
 alter table public.profiles add column if not exists ads_disabled boolean not null default false;
 alter table public.profiles add column if not exists last_ad_shown_at timestamptz;
 alter table public.profiles add column if not exists hands_since_last_ad integer not null default 0;
+-- Lifetime count of games this account has finished (busted or cashed),
+-- summed across every deck -- distinct from deck_progress.games_played,
+-- which is the same idea but scoped per (user, deck). Incremented once per
+-- game end in finalize_session() below the "REMOVE ADS + AD SYSTEM"
+-- section, not here -- this column only needed to exist by the time that
+-- runs. Exists specifically to gate a new account's very first ad (see
+-- should_show_pregame_ad/record_hand_for_ad_gate further down): neither
+-- fires at all until this reaches 10, regardless of the 60-minute cooldown
+-- or 30-hand pacing below.
+alter table public.profiles add column if not exists games_completed integer not null default 0;
 -- Preference, not server-owned state -- same "direct client update, no
 -- RPC" pattern as equipped_theme. Reappears automatically after a refund
 -- because app-store-notifications (the ASSN v2 webhook, see
@@ -2242,11 +2260,17 @@ create policy "users can read their own iap transactions"
   using (auth.uid() = user_id);
 
 -- Whether to show the pre-game interstitial: false immediately if ads are
--- disabled (purchased, and not since refunded) or if last_ad_shown_at is
--- less than 60 minutes old. If eligible, atomically stamps
--- last_ad_shown_at = now() in the same locked read that decides "yes" --
--- the `for update` row lock means two concurrent calls (e.g. two tabs)
--- can't both come back "yes" for the same 60-minute window.
+-- disabled (purchased, and not since refunded), if the account hasn't yet
+-- completed 10 full games (games_completed, added above -- a new
+-- account's very first ad, from either gate, is pushed back until then),
+-- or if last_ad_shown_at is less than 60 minutes old. If eligible,
+-- atomically stamps last_ad_shown_at = now() in the same locked read that
+-- decides "yes" -- the `for update` row lock means two concurrent calls
+-- (e.g. two tabs) can't both come back "yes" for the same 60-minute
+-- window. Deliberately does NOT touch last_ad_shown_at while gated on
+-- games_completed, so the 60-minute cooldown starts counting fresh from
+-- an account's actual first ad, not from some earlier moment during the
+-- grace period.
 --
 -- Deliberately its own RPC, not folded into start_game -- keeps ad-gating
 -- entirely outside the deck/session code path that start_game owns. The
@@ -2260,18 +2284,24 @@ as $$
 declare
   v_ads_disabled boolean;
   v_last_shown timestamptz;
+  v_games_completed integer;
 begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
   perform public.check_rate_limit();
 
-  select ads_disabled, last_ad_shown_at into v_ads_disabled, v_last_shown
+  select ads_disabled, last_ad_shown_at, games_completed
+    into v_ads_disabled, v_last_shown, v_games_completed
     from public.profiles
    where id = auth.uid()
    for update;
 
   if coalesce(v_ads_disabled, false) then
+    return false;
+  end if;
+
+  if coalesce(v_games_completed, 0) < 10 then
     return false;
   end if;
 
@@ -2294,7 +2324,14 @@ grant execute on function public.should_show_pregame_ad() to authenticated;
 -- moment it reaches 30. Skips entirely (no counter mutation at all) if
 -- ads are disabled, same as should_show_pregame_ad above -- so a
 -- Remove-Ads purchase mid-session doesn't leave a stale near-30 count
--- waiting to fire once ads are later re-enabled by a refund.
+-- waiting to fire once ads are later re-enabled by a refund. Skips the
+-- same no-mutation way until the account has completed 10 full games
+-- (games_completed, added above) -- an account's early hands, before
+-- that threshold, shouldn't silently build up progress toward an ad that
+-- then fires the moment they cross it; the 30-hand count only starts
+-- once ads become possible at all, matching should_show_pregame_ad's own
+-- cooldown timestamp likewise never being touched during the grace
+-- period.
 create or replace function public.record_hand_for_ad_gate() returns boolean
 language plpgsql
 security definer
@@ -2302,6 +2339,7 @@ set search_path = public
 as $$
 declare
   v_ads_disabled boolean;
+  v_games_completed integer;
   v_count integer;
 begin
   if auth.uid() is null then
@@ -2309,8 +2347,13 @@ begin
   end if;
   perform public.check_rate_limit();
 
-  select ads_disabled into v_ads_disabled from public.profiles where id = auth.uid() for update;
+  select ads_disabled, games_completed into v_ads_disabled, v_games_completed
+    from public.profiles where id = auth.uid() for update;
   if coalesce(v_ads_disabled, false) then
+    return false;
+  end if;
+
+  if coalesce(v_games_completed, 0) < 10 then
     return false;
   end if;
 

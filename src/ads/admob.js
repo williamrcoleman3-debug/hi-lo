@@ -1,6 +1,6 @@
 import { AdMob } from "@capacitor-community/admob";
 import { Capacitor } from "@capacitor/core";
-import { ensureAttPrompted } from "./attPrompt.js";
+import { getAttStatus } from "./attPrompt.js";
 
 // import.meta.env.DEV is Vite's own dev/production build flag -- true for
 // `npm run dev`, false for `npm run build` (what release/TestFlight/App
@@ -45,7 +45,13 @@ export async function showInterstitial(placement) {
 
   await ensureInitialized();
 
-  const attStatus = await ensureAttPrompted();
+  // Reads whatever ATT status the OS already has on file -- see
+  // src/App.jsx's userId effect for where the actual permission request
+  // now happens, right after sign-in. Never prompts from here: if no
+  // sign-in has ever happened on this device, status is "notDetermined",
+  // which the check below already treats as non-personalized, same as an
+  // explicit decline.
+  const attStatus = await getAttStatus();
   const npa = attStatus !== "authorized";
 
   try {

@@ -12,6 +12,7 @@ import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay"
 import { GameScreen } from "./components/GameScreen";
 import { Footer } from "./components/Footer";
 import { initPurchases } from "./iap/purchases.js";
+import { ensureAttPrompted } from "./ads/attPrompt.js";
 
 // Every tab besides Game is code-split -- its chunk is only fetched the
 // first time a visitor actually opens that tab, not bundled into the
@@ -111,6 +112,22 @@ export default function App() {
       console.error("initPurchases failed:", err);
     });
   }, [userId, refreshProfile]);
+
+  // Requests the App Tracking Transparency permission (if not already
+  // answered on this device) the moment a session first exists -- this
+  // effect only re-fires when userId itself changes value, so a token
+  // refresh (same userId, new session object) never re-triggers it, and
+  // ensureAttPrompted()'s own getStatus() check means it never re-prompts
+  // regardless of how many times this fires (a returning signed-in user's
+  // next app launch included). Covers every path that can produce a
+  // session -- OTP code, password sign-in, and magic-link/PKCE instant
+  // sign-in all funnel through the same useAuth() session state -- so
+  // there's nowhere else this needs to be called from. See
+  // src/ads/attPrompt.js for why this moved off the ad-display path.
+  useEffect(() => {
+    if (!userId) return;
+    ensureAttPrompted();
+  }, [userId]);
 
   return (
     <ThemeProvider>

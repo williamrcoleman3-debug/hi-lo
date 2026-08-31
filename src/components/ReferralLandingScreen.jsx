@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_STACK, FONT_TABULAR } from "../themes/registry.js";
 
@@ -14,8 +15,27 @@ const APP_STORE_URL = "https://apps.apple.com/us/app/hi-lo-same/id6797107646";
 // iOS's "Pasted from" banner even for non-referred installs -- reverted
 // in favor of the visitor just typing the code in themselves, same as the
 // existing manual invite-code field in AuthWidget already supported).
+//
+// The tap-to-copy button below is unrelated to that reverted feature --
+// this only ever writes the plain code (no HILO-REF: prefix) on a direct
+// tap of this button, nothing automatic on page load, so it doesn't carry
+// any of the gesture-timing or "Pasted from" issues that came from reading
+// the clipboard silently on the app's own first launch.
 export function ReferralLandingScreen({ username }) {
   const C = useThemeTokens();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCode = async () => {
+    if (!navigator.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(username);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard write can fail (permissions, non-secure context) -- the
+      // code is still right there to copy by hand either way.
+    }
+  };
 
   return (
     <div
@@ -35,14 +55,15 @@ export function ReferralLandingScreen({ username }) {
           <span className="text-xs" style={{ color: C.textMuted }}>
             Your referral code
           </span>
-          <div
-            className="rounded-lg px-3 py-2 text-lg font-semibold"
+          <button
+            onClick={handleCopyCode}
+            className="w-full rounded-lg px-3 py-2 text-lg font-semibold transition-transform active:scale-95"
             style={{ border: `1px solid ${C.border}`, color: C.accent, ...FONT_TABULAR }}
           >
-            {username}
-          </div>
+            {copied ? "Copied!" : username}
+          </button>
           <span className="text-xs" style={{ color: C.textMuted }}>
-            Enter this code when you sign up in the app.
+            Tap to copy — enter it when you sign up in the app.
           </span>
         </div>
 

@@ -10,7 +10,7 @@ export function ReferralScreen({ userId, profile }) {
   const inviteUrl = profile?.username ? buildShareUrl(profile.username) : null;
 
   const handleInvite = async () => {
-    const result = await shareResult(`Come play Hi-Lo-Same, use code ${profile?.username} at sign in`, inviteUrl);
+    const result = await shareResult(`Come play Hi-Lo-Same, use code "${profile?.username}" at sign in`, inviteUrl);
     if (result === "copied") {
       setInviteNotice("Copied to clipboard!");
       setTimeout(() => setInviteNotice(null), 2000);

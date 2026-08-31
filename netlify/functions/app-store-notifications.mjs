@@ -86,11 +86,12 @@ export default async (req) => {
   }
 
   // Reappear the Remove Ads banner (see src/components/RemoveAdsBanner.jsx)
-  // now that ads are back on for this account -- it only ever shows again
-  // via this exact reset, never on its own.
+  // immediately now that ads are back on for this account -- null, not
+  // just an old timestamp outside the 24-hour cooldown, so a refund is
+  // never left waiting out whatever's left of a stale pre-refund dismiss.
   const { error: profileUpdateError } = await admin
     .from("profiles")
-    .update({ ads_disabled: false, remove_ads_banner_dismissed: false })
+    .update({ ads_disabled: false, remove_ads_banner_dismissed_at: null })
     .eq("id", existing.user_id);
 
   if (profileUpdateError) {

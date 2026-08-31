@@ -1,14 +1,24 @@
 import { useThemeTokens } from "../themes/ThemeContext";
 
-// Signed-in only -- ads_disabled/remove_ads_banner_dismissed both live on
-// profiles. Hidden once purchased (ads_disabled) or once dismissed
-// (remove_ads_banner_dismissed) -- but a refund resets BOTH server-side
-// (see netlify/functions/app-store-notifications.mjs), which is the only
-// thing that ever brings this back after a dismiss.
+const DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+// Signed-in only -- ads_disabled/remove_ads_banner_dismissed_at both live
+// on profiles. ads_disabled (purchased, and not since refunded)
+// permanently and unconditionally suppresses this, independent of the
+// dismiss timestamp -- checked first, short-circuits before the cooldown
+// math even runs. remove_ads_banner_dismissed_at is a cooldown, not a
+// permanent dismiss: null (never dismissed) or more than 24 hours old
+// both mean "eligible to show again." A refund resets BOTH ads_disabled
+// and remove_ads_banner_dismissed_at server-side (see
+// netlify/functions/app-store-notifications.mjs) so a refund doesn't
+// have to wait out whatever's left of a stale pre-refund cooldown.
 export function RemoveAdsBanner({ profile, onDismiss, onViewRemoveAds }) {
   const C = useThemeTokens();
 
-  if (!profile || profile.ads_disabled || profile.remove_ads_banner_dismissed) return null;
+  if (!profile || profile.ads_disabled) return null;
+
+  const dismissedAt = profile.remove_ads_banner_dismissed_at;
+  if (dismissedAt && Date.now() - new Date(dismissedAt).getTime() < DISMISS_COOLDOWN_MS) return null;
 
   return (
     <div

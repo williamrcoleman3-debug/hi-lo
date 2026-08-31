@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "../supabase/client.js";
 import { consumePendingReferral } from "../referral/referral.js";
 
 const PROFILE_COLUMNS =
-  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed";
+  "id, username, avatar, current_streak, longest_streak, last_banked_date, lifeline_balance, spendable_tokens, referred_signups_count, qualified_referral_count, ads_disabled, remove_ads_banner_dismissed_at";
 
 export function useAuth() {
   const [session, setSession] = useState(null);
@@ -226,15 +226,16 @@ export function useAuth() {
 
   // Direct client update, same pattern as equipped_theme -- this is just a
   // dismiss preference, not server-owned state (unlike ads_disabled, which
-  // is column-revoked from direct client writes, see schema.sql). The
-  // Remove Ads banner (src/components/RemoveAdsBanner.jsx) reads this to
-  // decide whether to render at all.
+  // is column-revoked from direct client writes, see schema.sql). Stamps
+  // now() rather than setting a permanent flag -- the Remove Ads banner
+  // (src/components/RemoveAdsBanner.jsx) reads this timestamp to hide
+  // itself for a 24-hour cooldown, not forever.
   const dismissRemoveAdsBanner = useCallback(async () => {
     const userId = session?.user?.id;
     if (!userId) return;
     const { data, error } = await supabase
       .from("profiles")
-      .update({ remove_ads_banner_dismissed: true })
+      .update({ remove_ads_banner_dismissed_at: new Date().toISOString() })
       .eq("id", userId)
       .select(PROFILE_COLUMNS)
       .single();

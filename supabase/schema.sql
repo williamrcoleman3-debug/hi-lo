@@ -2172,11 +2172,23 @@ alter table public.profiles add column if not exists hands_since_last_ad integer
 -- or 30-hand pacing below.
 alter table public.profiles add column if not exists games_completed integer not null default 0;
 -- Preference, not server-owned state -- same "direct client update, no
--- RPC" pattern as equipped_theme. Reappears automatically after a refund
--- because app-store-notifications (the ASSN v2 webhook, see
--- supabase/functions/app-store-notifications) resets this to false
--- whenever it flips ads_disabled back to false.
-alter table public.profiles add column if not exists remove_ads_banner_dismissed boolean not null default false;
+-- RPC" pattern as equipped_theme. A timestamp, not a boolean: the banner
+-- (src/components/RemoveAdsBanner.jsx) reappears 24 hours after this is
+-- set, not never again -- null means "never dismissed," same as any
+-- other dismiss-once-shown-again state. ads_disabled (above) is the
+-- actual purchase gate and independently, permanently suppresses the
+-- banner regardless of this column -- see RemoveAdsBanner.jsx's own
+-- render check. Also reset (to null) immediately on a refund by
+-- app-store-notifications (the ASSN v2 webhook, see
+-- supabase/functions/app-store-notifications) whenever it flips
+-- ads_disabled back to false, so a refund doesn't have to wait out
+-- whatever's left of a stale pre-refund cooldown.
+alter table public.profiles add column if not exists remove_ads_banner_dismissed_at timestamptz;
+-- Superseded by the timestamp column above -- kept only as a drop
+-- statement here (not a lingering unused column) so this section stays
+-- safe to paste wholesale against the already-live database, same as
+-- every other statement in this file.
+alter table public.profiles drop column if exists remove_ads_banner_dismissed;
 
 -- ---------------------------------------------------------------------------
 -- CLIENT-WRITABLE COLUMN ALLOWLIST for profiles.
@@ -2216,7 +2228,7 @@ alter table public.profiles add column if not exists remove_ads_banner_dismissed
 -- any UPDATE grant on this table at all.
 -- ---------------------------------------------------------------------------
 revoke update on public.profiles from authenticated, anon;
-grant update (username, avatar, equipped_theme, game_mode, remove_ads_banner_dismissed)
+grant update (username, avatar, equipped_theme, game_mode, remove_ads_banner_dismissed_at)
   on public.profiles to authenticated;
 
 -- iap_transactions: one row per StoreKit transaction ever seen for this

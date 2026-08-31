@@ -1,7 +1,19 @@
 import { useState } from "react";
 import { useThemeTokens } from "../themes/ThemeContext";
 
-const DISMISS_KEY = "hilo:referralBannerDismissed";
+const DISMISS_KEY = "hilo:referralBannerDismissedAt";
+const DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function isDismissedRecently() {
+  try {
+    const stored = localStorage.getItem(DISMISS_KEY);
+    if (!stored) return false;
+    const dismissedAt = Number(stored);
+    return Number.isFinite(dismissedAt) && Date.now() - dismissedAt < DISMISS_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
 
 // Signed-in only, same pattern as RemoveAdsBanner -- advertises the
 // existing referral reward rather than introducing a second place lifeline
@@ -12,26 +24,20 @@ const DISMISS_KEY = "hilo:referralBannerDismissed";
 // Referrals tab, where the player's actual invite link/code lives
 // (ReferralScreen.jsx).
 //
-// Dismiss is a plain localStorage flag, not a server-persisted column like
-// RemoveAdsBanner's remove_ads_banner_dismissed -- this is a one-time
-// nudge toward a feature the player can always find again under Referrals,
-// not a purchase upsell that needs to reappear after a refund. No schema
-// change needed; a device-local dismiss is enough.
+// Dismiss is a plain localStorage timestamp, not a server-persisted column
+// like RemoveAdsBanner's -- this is a repeating nudge toward a feature the
+// player can always find again under Referrals, not a purchase upsell tied
+// to refund state, so a device-local 24-hour cooldown is enough; no schema
+// change needed.
 export function ReferralBanner({ onViewReferrals }) {
   const C = useThemeTokens();
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return localStorage.getItem(DISMISS_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [dismissed, setDismissed] = useState(isDismissedRecently);
 
   if (dismissed) return null;
 
   const handleDismiss = () => {
     try {
-      localStorage.setItem(DISMISS_KEY, "1");
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
     } catch {
       // localStorage can throw (private browsing, disabled storage) -- the
       // dismiss still applies for the rest of this session either way.

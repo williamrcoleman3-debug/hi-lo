@@ -2449,3 +2449,146 @@ $$;
 
 revoke all on function public.grant_daily_bonus_games() from public, anon, authenticated;
 grant execute on function public.grant_daily_bonus_games() to authenticated;
+
+-- REFERRAL TREE REPORTING --------------------------------------------------
+-- Read-only visibility into the FULL referral chain below one starting
+-- account -- not just the direct referred_by link attribute_referral()
+-- records, but who each of those people went on to refer, and so on, with
+-- no depth limit. Pure SQL-editor reporting, same access pattern as
+-- retention_by_cohort/referrer_engagement above -- nothing granted to
+-- anon/authenticated, no security definer (no lesser-privileged caller is
+-- ever meant to reach these; only the postgres role via the SQL Editor
+-- does, which already has full table access regardless). Query directly:
+--   select * from public.get_referral_tree('someusername');
+--   select * from public.get_referral_downline_count('someusername');
+--
+-- This is reporting only. Neither function reads or writes anything
+-- related to payout, qualification, or lifelines -- referred_signups_count,
+-- qualified_referral_count, referral_reward_granted, and lifeline_balance
+-- are untouched, and nothing here is called from attribute_referral() or
+-- finalize_session(). No client code calls these either; they exist to be
+-- run by hand.
+--
+-- Both functions join on profiles.referred_by at every recursion depth.
+-- It's a plain FK column (see profiles above) -- Postgres doesn't index
+-- foreign keys automatically, and confirmed no existing index covers it
+-- (profiles only has profiles_username_lower_idx, on lower(username)) --
+-- so without this, each level of the walk is a sequential scan over the
+-- whole table.
+create index if not exists profiles_referred_by_idx on public.profiles (referred_by);
+
+-- Cycle safety: referred_by is a single column set exactly once per
+-- account, at signup, to an already-existing profile (attribute_referral()
+-- rejects self-referral and never overwrites a set value) -- so every
+-- account has at most one parent and a referral chain is structurally a
+-- tree, not just an acyclic graph. A cycle is not reachable today. The
+-- `path` array below still guards against one forming anyway, purely as
+-- cheap insurance against some future change to attribute_referral quietly
+-- breaking that guarantee -- without it, such a bug would hang this
+-- function in an infinite loop instead of just returning wrong data.
+--
+-- An unknown or leaf username (no matches, or matches with nobody under
+-- them) isn't distinguished from each other -- both simply return zero
+-- rows / zero counts rather than an error. Worth knowing before reading a
+-- "0" as "definitely a real user with no referrals" rather than "typo'd
+-- the username."
+--
+-- qualified reads profiles.has_played_ever directly -- the exact same flag
+-- finalize_session() flips (see that function, further up this file) the
+-- first time ANY session for that account finalizes, bust or bank, which
+-- is also the same event that gates the referrer's own +10 lifeline payout
+-- and qualified_referral_count increment. Not a second definition of
+-- "completed a game" computed independently here -- every row in this
+-- function's output already has referred_by set (that's how it got into
+-- the tree), so for these rows has_played_ever and referral_reward_granted
+-- always flip together in that same block; reading has_played_ever is
+-- equivalent to reading referral_reward_granted here, and was chosen as
+-- the more directly-named of the two.
+--
+-- Dropped and recreated rather than CREATE OR REPLACE-d in place --
+-- Postgres doesn't allow CREATE OR REPLACE FUNCTION to change a table
+-- function's returned column list (adding `qualified` here), only its
+-- body; changing the columns requires DROP FUNCTION first.
+drop function if exists public.get_referral_tree(text);
+
+create function public.get_referral_tree(p_root_username text)
+returns table (
+  username text,
+  referrer_username text,
+  depth integer,
+  signup_date date,
+  qualified boolean
+)
+language sql
+stable
+set search_path = public
+as $$
+  with recursive downline as (
+    select
+      p.id,
+      p.username,
+      root.username as referrer_username,
+      1 as depth,
+      (p.created_at at time zone 'utc')::date as signup_date,
+      p.has_played_ever as qualified,
+      array[p.id] as path
+    from public.profiles root
+    join public.profiles p on p.referred_by = root.id
+    where lower(root.username) = lower(p_root_username)
+
+    union all
+
+    select
+      p.id,
+      p.username,
+      d.username as referrer_username,
+      d.depth + 1,
+      (p.created_at at time zone 'utc')::date as signup_date,
+      p.has_played_ever as qualified,
+      d.path || p.id
+    from downline d
+    join public.profiles p on p.referred_by = d.id
+    where not p.id = any(d.path)
+  )
+  select username, referrer_username, depth, signup_date, qualified
+  from downline
+  order by depth, signup_date;
+$$;
+
+revoke all on function public.get_referral_tree(text) from public, anon, authenticated;
+
+-- Rolls get_referral_tree up into two numbers -- direct referrals only,
+-- and the full downline (every level combined). Its own function rather
+-- than "select count(*) from get_referral_tree(...)" so a one-line
+-- headcount doesn't require materializing the whole tree first; the
+-- recursive walk itself is identical to get_referral_tree above, just
+-- without the username/date columns it doesn't need.
+create or replace function public.get_referral_downline_count(p_root_username text)
+returns table (
+  direct_count integer,
+  total_downline_count integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  with recursive downline as (
+    select p.id, 1 as depth, array[p.id] as path
+    from public.profiles root
+    join public.profiles p on p.referred_by = root.id
+    where lower(root.username) = lower(p_root_username)
+
+    union all
+
+    select p.id, d.depth + 1, d.path || p.id
+    from downline d
+    join public.profiles p on p.referred_by = d.id
+    where not p.id = any(d.path)
+  )
+  select
+    count(*) filter (where depth = 1)::integer as direct_count,
+    count(*)::integer as total_downline_count
+  from downline;
+$$;
+
+revoke all on function public.get_referral_downline_count(text) from public, anon, authenticated;

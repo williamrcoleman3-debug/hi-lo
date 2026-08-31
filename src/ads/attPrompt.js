@@ -1,26 +1,40 @@
 import { Capacitor } from "@capacitor/core";
 import { AppTrackingTransparency } from "capacitor-plugin-app-tracking-transparency";
 
-// Requests the iOS App Tracking Transparency permission at most once ever
-// per device (the OS itself remembers the answer -- getStatus() only ever
-// returns "notDetermined" before the very first prompt). Called once, right
-// after a session is first established -- see src/App.jsx's userId effect,
-// which covers every sign-in path (OTP code, password, magic-link/PKCE
-// instant sign-in) plus a returning already-signed-in user's app launch,
-// since they all funnel through the same shared `user` state. Deliberately
-// NOT called from the ad-display path (src/ads/admob.js, see getAttStatus
-// below) anymore -- it used to be, but that meant the prompt was delayed
-// however long it took a player to reach their first ad, which after the
-// pre-game ad's own 10-completed-games threshold was added meant an App
-// Store reviewer could easily never see it at all. Declining is a
-// permanent, legitimate choice: ads fall back to a non-personalized
-// request (see admob.js) -- this never blocks the app or gameplay either
-// way. No-ops on web/Android, where there is no ATT prompt at all.
-export async function ensureAttPrompted() {
+// Whether the ATT pre-permission screen (src/components/
+// AttPreambleScreen.jsx) should show right now -- true only the very
+// first time ever on this device, mirroring getStatus()'s own
+// "notDetermined" semantics: the OS itself remembers the real answer
+// once given, so this can never return true again after Apple's actual
+// dialog has been answered once, on its own, with no extra flag needed
+// here. Read-only -- never prompts, never mutates anything. Called once,
+// right after a session is first established -- see src/App.jsx's userId
+// effect, which covers every sign-in path (OTP code, password, magic-
+// link/PKCE instant sign-in) plus a returning already-signed-in user's
+// app launch, since they all funnel through the same shared `user` state.
+export async function shouldShowAttPreamble() {
+  if (!Capacitor.isNativePlatform()) return false;
+  try {
+    const { status } = await AppTrackingTransparency.getStatus();
+    return status === "notDetermined";
+  } catch {
+    return false;
+  }
+}
+
+// Actually triggers Apple's own native ATT system dialog -- only ever
+// called from AttPreambleScreen's "Continue" tap (App.jsx), never
+// automatically and never from the ad-display path (see getAttStatus
+// below) -- that used to be where this fired, but that meant the prompt
+// was delayed however long it took a player to reach their first ad,
+// which after the pre-game ad's own 10-completed-games threshold was
+// added meant an App Store reviewer could easily never see it at all.
+// Declining is a permanent, legitimate choice: ads fall back to a
+// non-personalized request (see admob.js's getAttStatus/npa handling) --
+// this never blocks the app or gameplay either way.
+export async function requestAttPermission() {
   if (!Capacitor.isNativePlatform()) return "authorized";
   try {
-    const { status: current } = await AppTrackingTransparency.getStatus();
-    if (current !== "notDetermined") return current;
     const { status } = await AppTrackingTransparency.requestPermission();
     return status;
   } catch {

@@ -13,8 +13,9 @@ import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay"
 import { GameScreen } from "./components/GameScreen";
 import { Footer } from "./components/Footer";
 import { ReferralLandingScreen } from "./components/ReferralLandingScreen.jsx";
+import { AttPreambleScreen } from "./components/AttPreambleScreen.jsx";
 import { initPurchases } from "./iap/purchases.js";
-import { ensureAttPrompted } from "./ads/attPrompt.js";
+import { shouldShowAttPreamble, requestAttPermission } from "./ads/attPrompt.js";
 
 // A referral link (?ref=username) opened on a mobile browser without the
 // app installed falls through Universal Links to plain Safari -- there's
@@ -128,21 +129,32 @@ export default function App() {
     });
   }, [userId, refreshProfile]);
 
-  // Requests the App Tracking Transparency permission (if not already
-  // answered on this device) the moment a session first exists -- this
-  // effect only re-fires when userId itself changes value, so a token
-  // refresh (same userId, new session object) never re-triggers it, and
-  // ensureAttPrompted()'s own getStatus() check means it never re-prompts
-  // regardless of how many times this fires (a returning signed-in user's
-  // next app launch included). Covers every path that can produce a
-  // session -- OTP code, password sign-in, and magic-link/PKCE instant
-  // sign-in all funnel through the same useAuth() session state -- so
-  // there's nowhere else this needs to be called from. See
-  // src/ads/attPrompt.js for why this moved off the ad-display path.
+  // Checks whether the ATT pre-permission screen needs to show (if not
+  // already answered on this device) the moment a session first exists --
+  // this effect only re-fires when userId itself changes value, so a
+  // token refresh (same userId, new session object) never re-triggers it,
+  // and shouldShowAttPreamble()'s own getStatus() check means it can
+  // never resolve true again after the real dialog has been answered once
+  // (a returning signed-in user's next app launch included). Covers every
+  // path that can produce a session -- OTP code, password sign-in, and
+  // magic-link/PKCE instant sign-in all funnel through the same
+  // useAuth() session state -- so there's nowhere else this needs to be
+  // called from. Only sets state here; the actual native dialog only
+  // fires from AttPreambleScreen's own "Continue" tap, never
+  // automatically. See src/ads/attPrompt.js for why this moved off the
+  // ad-display path.
+  const [showAttPreamble, setShowAttPreamble] = useState(false);
   useEffect(() => {
     if (!userId) return;
-    ensureAttPrompted();
+    shouldShowAttPreamble().then((shouldShow) => {
+      if (shouldShow) setShowAttPreamble(true);
+    });
   }, [userId]);
+
+  const handleAttPreambleContinue = () => {
+    setShowAttPreamble(false);
+    requestAttPermission();
+  };
 
   // Checked after every hook above has already run (Rules of Hooks --
   // this can't short-circuit before them), but before anything renders:
@@ -194,6 +206,7 @@ export default function App() {
         setGameMode={setGameMode}
         messages={messages}
       />
+      {showAttPreamble && <AttPreambleScreen onContinue={handleAttPreambleContinue} />}
     </ThemeProvider>
   );
 }

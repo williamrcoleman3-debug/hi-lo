@@ -12,43 +12,23 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-// True once this app process has already resolved the pre-game ad check
-// (shown or skipped, doesn't matter) -- only reset by a fresh app launch,
-// never by playing another game in the same session.
-let pregameAdResolvedThisLaunch = false;
-
-export function resetPregameAdStateForTesting() {
-  pregameAdResolvedThisLaunch = false;
-}
-
-// Runs the pre-game ad check + display exactly once per app launch --
-// safe to call before every game start; a no-op after the first
-// resolution, whether that resolution was a shown ad, a server "not yet"
-// (still in the 60-minute cooldown, or ads_disabled), or a failure.
-// Never throws and never blocks gameplay: any error or timeout at any
-// step fails open (resolves having shown nothing).
-export async function runPregameAdGate({ checkPregameAd, showInterstitial }) {
-  if (pregameAdResolvedThisLaunch) return;
-  pregameAdResolvedThisLaunch = true;
+// Runs the single ad-eligibility check before every game start. Replaces
+// the old two-mechanism system (a once-per-app-launch pre-game gate plus
+// an unbounded 30-hand counter) with one rolling-hour-window rule, paced
+// entirely server-side -- see supabase/schema.sql's
+// should_show_ad_for_new_game(): an ad shows on the first game of a new
+// 60-minute window, and again on every 21st game within that same window.
+// No client-side state at all (unlike the old pregameAdResolvedThisLaunch
+// flag) -- every call goes to the server, which is the only source of
+// truth for the window, so this is safe to call before every single game,
+// not just the first one of a launch. Same fail-open contract as before:
+// never blocks the next game from dealing.
+export async function runGameStartAdGate({ checkAd, showInterstitial }) {
   try {
-    const shouldShow = await withTimeout(checkPregameAd(), AD_TIMEOUT_MS);
+    const shouldShow = await withTimeout(checkAd(), AD_TIMEOUT_MS);
     if (!shouldShow) return;
     await withTimeout(showInterstitial(), AD_TIMEOUT_MS);
   } catch {
     // Fail open -- offline, RPC error, ad failed to load, or timed out.
-  }
-}
-
-// Runs after every resolved hand (no once-per-launch limit, unlike the
-// pre-game gate above -- the server's 30-hand counter is what actually
-// paces this). Same fail-open contract: never blocks the next hand from
-// starting.
-export async function runHandAdGate({ recordHandForAdGate, showInterstitial }) {
-  try {
-    const shouldShow = await withTimeout(recordHandForAdGate(), AD_TIMEOUT_MS);
-    if (!shouldShow) return;
-    await withTimeout(showInterstitial(), AD_TIMEOUT_MS);
-  } catch {
-    // Fail open.
   }
 }

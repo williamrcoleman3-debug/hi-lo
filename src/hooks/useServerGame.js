@@ -7,12 +7,11 @@ import {
   useLifelineInSession,
   bustSession,
   bankSession,
-  shouldShowPregameAd,
-  recordHandForAdGate,
+  shouldShowAdForNewGame,
 } from "../session/gameSession.js";
 import { playClickTone, playWinTone, playLoseTone } from "../audio/sound.js";
 import { hapticTap, hapticWin, hapticBust } from "../haptics/haptics.js";
-import { runPregameAdGate, runHandAdGate } from "../ads/adGate.js";
+import { runGameStartAdGate } from "../ads/adGate.js";
 import { showInterstitial } from "../ads/admob.js";
 
 const FLASH_MS = 180;
@@ -106,12 +105,12 @@ export function useServerGame(deckConfig, { onGameEnd, onLifelineUsed, lifelineB
     setStatus("loading");
     setMessage("Dealing…");
     try {
-      // No-ops after the first call of this app launch (see adGate.js) --
-      // safe to call before every game, not just the very first one.
-      // Fails open on any error/timeout/offline device, never blocks
-      // dealing.
-      await runPregameAdGate({
-        checkPregameAd: shouldShowPregameAd,
+      // Checked before every single game start -- the rolling 60-minute
+      // window is what actually paces this server-side (see adGate.js),
+      // not a client-side once-per-launch guard. Fails open on any
+      // error/timeout/offline device, never blocks dealing.
+      await runGameStartAdGate({
+        checkAd: shouldShowAdForNewGame,
         showInterstitial: () => showInterstitial("pregame"),
       });
 
@@ -299,16 +298,6 @@ export function useServerGame(deckConfig, { onGameEnd, onLifelineUsed, lifelineB
             // rather than showing an offer the player can't act on.
             resolveBust(`Busted on ${result.drawnCard.rank.key}${result.drawnCard.suit.symbol}. Lost ${banked.toLocaleString()} tokens.`, banked);
           }
-
-          // This hand's own outcome is already fully reflected in state
-          // above -- this only gates the NEXT hand starting (`revealing`
-          // is what actually blocks input), matching "show an ad before
-          // the next hand starts," not "delay revealing this one." Fails
-          // open on any error/timeout/offline device.
-          await runHandAdGate({
-            recordHandForAdGate,
-            showInterstitial: () => showInterstitial("thirtyHand"),
-          });
 
           setRevealing(false);
         } catch (err) {

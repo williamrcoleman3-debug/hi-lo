@@ -2159,17 +2159,30 @@ revoke all on function public.find_sessions_for_review(text) from public, anon, 
 -- ============================================================================
 
 alter table public.profiles add column if not exists ads_disabled boolean not null default false;
-alter table public.profiles add column if not exists last_ad_shown_at timestamptz;
-alter table public.profiles add column if not exists hands_since_last_ad integer not null default 0;
+-- Replaces last_ad_shown_at + hands_since_last_ad below with a single
+-- rolling-window rule -- see should_show_ad_for_new_game() further down:
+-- an ad shows on the first game played in a new 60-minute window, and
+-- again on every 21st game played within that same still-active window.
+-- null/0 means "no window open yet." Both null (never touched) and a
+-- window older than 60 minutes are treated the same way -- "start a
+-- fresh window right now."
+alter table public.profiles add column if not exists ad_window_started_at timestamptz;
+alter table public.profiles add column if not exists games_played_in_ad_window integer not null default 0;
+-- Superseded by the two columns above -- kept only as drop statements
+-- here (not lingering unused columns) so this section stays safe to
+-- paste wholesale against the already-live database, same as every
+-- other statement in this file.
+alter table public.profiles drop column if exists last_ad_shown_at;
+alter table public.profiles drop column if exists hands_since_last_ad;
 -- Lifetime count of games this account has finished (busted or cashed),
 -- summed across every deck -- distinct from deck_progress.games_played,
 -- which is the same idea but scoped per (user, deck). Incremented once per
 -- game end in finalize_session() below the "REMOVE ADS + AD SYSTEM"
 -- section, not here -- this column only needed to exist by the time that
 -- runs. Exists specifically to gate a new account's very first ad (see
--- should_show_pregame_ad/record_hand_for_ad_gate further down): neither
--- fires at all until this reaches 10, regardless of the 60-minute cooldown
--- or 30-hand pacing below.
+-- should_show_ad_for_new_game further down): no ad window is ever
+-- started, and no ad ever shows, until this reaches 10 -- regardless of
+-- the rolling-window pacing above.
 alter table public.profiles add column if not exists games_completed integer not null default 0;
 -- Preference, not server-owned state -- same "direct client update, no
 -- RPC" pattern as equipped_theme. A timestamp, not a boolean: the banner
@@ -2271,40 +2284,50 @@ create policy "users can read their own iap transactions"
   on public.iap_transactions for select
   using (auth.uid() = user_id);
 
--- Whether to show the pre-game interstitial: false immediately if ads are
--- disabled (purchased, and not since refunded), if the account hasn't yet
--- completed 10 full games (games_completed, added above -- a new
--- account's very first ad, from either gate, is pushed back until then),
--- or if last_ad_shown_at is less than 60 minutes old. If eligible,
--- atomically stamps last_ad_shown_at = now() in the same locked read that
--- decides "yes" -- the `for update` row lock means two concurrent calls
--- (e.g. two tabs) can't both come back "yes" for the same 60-minute
--- window. Deliberately does NOT touch last_ad_shown_at while gated on
--- games_completed, so the 60-minute cooldown starts counting fresh from
--- an account's actual first ad, not from some earlier moment during the
--- grace period.
+-- Replaces should_show_pregame_ad() (once-per-launch + 60-minute cooldown)
+-- and record_hand_for_ad_gate() (unbounded 30-hand counter) with a single
+-- rolling-window rule, checked once per game start:
+--   - false immediately if ads are disabled (purchased, not since
+--     refunded), or if the account hasn't yet completed 10 full games
+--     (games_completed, added above -- a brand-new account's very first
+--     ad is still pushed back until then, same protection as before,
+--     layered on top of this rewrite rather than replaced by it -- no ad
+--     window is ever started during this grace period).
+--   - if there's no window yet, or the existing one started 60+ minutes
+--     ago, this game starts a brand new window: games_played_in_ad_window
+--     resets to 1 (this game IS the window's first) and an ad shows.
+--   - otherwise this game just increments games_played_in_ad_window
+--     within the still-active window, and an ad shows again every time
+--     that count is a multiple of 21 (21, 42, 63, ...) -- a repeating
+--     rule, not a one-time trigger.
+-- `for update` locks the row for the whole read-decide-write, so two
+-- concurrent calls (e.g. two tabs) can't both land on the same window
+-- boundary and both come back "yes".
 --
 -- Deliberately its own RPC, not folded into start_game -- keeps ad-gating
 -- entirely outside the deck/session code path that start_game owns. The
--- client (src/ads/adGate.js#runPregameAdGate) calls this at most once per
--- app launch, before the first start_game() of that launch.
-create or replace function public.should_show_pregame_ad() returns boolean
+-- client (src/ads/adGate.js#runGameStartAdGate) calls this before every
+-- single start_game(), unlike the old once-per-launch pre-game gate --
+-- the rolling window itself is what now does the pacing, not a client-side
+-- guard.
+create or replace function public.should_show_ad_for_new_game() returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
   v_ads_disabled boolean;
-  v_last_shown timestamptz;
   v_games_completed integer;
+  v_window_started_at timestamptz;
+  v_games_in_window integer;
 begin
   if auth.uid() is null then
     raise exception 'must be signed in';
   end if;
   perform public.check_rate_limit();
 
-  select ads_disabled, last_ad_shown_at, games_completed
-    into v_ads_disabled, v_last_shown, v_games_completed
+  select ads_disabled, games_completed, ad_window_started_at, games_played_in_ad_window
+    into v_ads_disabled, v_games_completed, v_window_started_at, v_games_in_window
     from public.profiles
    where id = auth.uid()
    for update;
@@ -2317,71 +2340,25 @@ begin
     return false;
   end if;
 
-  if v_last_shown is not null and now() - v_last_shown < interval '60 minutes' then
-    return false;
-  end if;
-
-  update public.profiles set last_ad_shown_at = now() where id = auth.uid();
-  return true;
-end;
-$$;
-
-revoke all on function public.should_show_pregame_ad() from public, anon, authenticated;
-grant execute on function public.should_show_pregame_ad() to authenticated;
-
--- Whether to show the 30-hand interstitial: increments
--- hands_since_last_ad on every call (one call per resolved hand, fired
--- from the client independently of make_call itself -- see
--- src/ads/adGate.js#runHandAdGate), resetting to 0 and returning true the
--- moment it reaches 30. Skips entirely (no counter mutation at all) if
--- ads are disabled, same as should_show_pregame_ad above -- so a
--- Remove-Ads purchase mid-session doesn't leave a stale near-30 count
--- waiting to fire once ads are later re-enabled by a refund. Skips the
--- same no-mutation way until the account has completed 10 full games
--- (games_completed, added above) -- an account's early hands, before
--- that threshold, shouldn't silently build up progress toward an ad that
--- then fires the moment they cross it; the 30-hand count only starts
--- once ads become possible at all, matching should_show_pregame_ad's own
--- cooldown timestamp likewise never being touched during the grace
--- period.
-create or replace function public.record_hand_for_ad_gate() returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_ads_disabled boolean;
-  v_games_completed integer;
-  v_count integer;
-begin
-  if auth.uid() is null then
-    raise exception 'must be signed in';
-  end if;
-  perform public.check_rate_limit();
-
-  select ads_disabled, games_completed into v_ads_disabled, v_games_completed
-    from public.profiles where id = auth.uid() for update;
-  if coalesce(v_ads_disabled, false) then
-    return false;
-  end if;
-
-  if coalesce(v_games_completed, 0) < 10 then
-    return false;
-  end if;
-
-  update public.profiles
-     set hands_since_last_ad = hands_since_last_ad + 1
-   where id = auth.uid()
-   returning hands_since_last_ad into v_count;
-
-  if v_count >= 30 then
-    update public.profiles set hands_since_last_ad = 0 where id = auth.uid();
+  if v_window_started_at is null or now() - v_window_started_at >= interval '60 minutes' then
+    update public.profiles
+       set ad_window_started_at = now(),
+           games_played_in_ad_window = 1
+     where id = auth.uid();
     return true;
   end if;
 
-  return false;
+  update public.profiles
+     set games_played_in_ad_window = games_played_in_ad_window + 1
+   where id = auth.uid()
+   returning games_played_in_ad_window into v_games_in_window;
+
+  return v_games_in_window % 21 = 0;
 end;
 $$;
 
-revoke all on function public.record_hand_for_ad_gate() from public, anon, authenticated;
-grant execute on function public.record_hand_for_ad_gate() to authenticated;
+revoke all on function public.should_show_ad_for_new_game() from public, anon, authenticated;
+grant execute on function public.should_show_ad_for_new_game() to authenticated;
+
+drop function if exists public.should_show_pregame_ad();
+drop function if exists public.record_hand_for_ad_gate();

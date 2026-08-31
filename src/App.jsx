@@ -1,18 +1,33 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useThemeTokens, ThemeProvider } from "./themes/ThemeContext";
 import { FONT_STACK } from "./themes/registry.js";
 import { useAuth } from "./hooks/useAuth";
 import { useProgress } from "./hooks/useProgress";
 import { useSiteMessages } from "./hooks/useSiteMessages";
-import { capturePendingReferral, initReferralDeepLinkCapture } from "./referral/referral.js";
+import { capturePendingReferral, initReferralDeepLinkCapture, parseRefFromUrl } from "./referral/referral.js";
 import { TabNav } from "./components/TabNav";
 import { AuthWidget } from "./components/AuthWidget";
 import { SiteBanner } from "./components/SiteBanner";
 import { SignedOutTutorialOverlay } from "./components/SignedOutTutorialOverlay";
 import { GameScreen } from "./components/GameScreen";
 import { Footer } from "./components/Footer";
+import { ReferralLandingScreen } from "./components/ReferralLandingScreen.jsx";
 import { initPurchases } from "./iap/purchases.js";
 import { ensureAttPrompted } from "./ads/attPrompt.js";
+
+// A referral link (?ref=username) opened on a mobile browser without the
+// app installed falls through Universal Links to plain Safari -- there's
+// nothing native to catch it there, so this is a render-time (not effect)
+// check: computed once per mount from the URL this page was actually
+// loaded with, since nothing in this app's URL ever changes without a full
+// reload (no client-side router). Native platform is deliberately excluded
+// -- see initReferralDeepLinkCapture, which already owns that case via
+// appUrlOpen, undisturbed by anything below.
+function getReferralLandingUsername() {
+  if (Capacitor.isNativePlatform()) return null;
+  return parseRefFromUrl(window.location.href);
+}
 
 // Every tab besides Game is code-split -- its chunk is only fetched the
 // first time a visitor actually opens that tab, not bundled into the
@@ -128,6 +143,24 @@ export default function App() {
     if (!userId) return;
     ensureAttPrompted();
   }, [userId]);
+
+  // Checked after every hook above has already run (Rules of Hooks --
+  // this can't short-circuit before them), but before anything renders:
+  // a referral landing page replaces the entire app for this one case,
+  // it doesn't layer on top of it. capturePendingReferral()/
+  // initReferralDeepLinkCapture() above still ran regardless, so if this
+  // visitor ends up playing the web version instead of tapping through to
+  // the App Store, the existing ?ref= capture still works exactly as
+  // before -- this is purely an additional UI layer, not a replacement
+  // for it.
+  const referralLandingUsername = getReferralLandingUsername();
+  if (referralLandingUsername) {
+    return (
+      <ThemeProvider>
+        <ReferralLandingScreen username={referralLandingUsername} />
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider>

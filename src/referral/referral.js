@@ -4,10 +4,13 @@ import { supabase } from "../supabase/client.js";
 
 const PENDING_REFERRAL_KEY = "hilo:pendingReferral";
 
-// Shared by the web query-string path (capturePendingReferral, below) and
-// the native Universal Link path (initReferralDeepLinkCapture) -- both hand
-// this a full URL and it pulls ?ref= out the same way.
-function parseRefFromUrl(url) {
+// Shared by the web query-string path (capturePendingReferral, below), the
+// native Universal Link path (initReferralDeepLinkCapture), and the
+// referral landing page (src/components/ReferralLandingScreen.jsx) -- all
+// three hand this a full URL and it pulls ?ref= out the same way. Exported
+// since the landing page needs the referrer's username to display as the
+// code, not just to capture it into storage.
+export function parseRefFromUrl(url) {
   try {
     return new URL(url).searchParams.get("ref");
   } catch {

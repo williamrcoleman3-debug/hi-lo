@@ -260,13 +260,13 @@ export function AuthWidget({
 
           <div className="flex flex-col gap-1">
             <label htmlFor="invite-code-field" className="text-xs" style={{ color: C.textMuted }}>
-              Invite code (optional)
+              Have a code from a friend? Enter it here (optional)
             </label>
             <input
               id="invite-code-field"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
-              placeholder="a friend's username"
+              placeholder="referral code"
               maxLength={16}
               className="rounded-lg px-3 py-2 text-base"
               style={inputStyle}

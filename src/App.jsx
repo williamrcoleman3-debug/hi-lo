@@ -291,9 +291,9 @@ function AppShell({
           refreshDeckProgress={refreshDeckProgress}
           selectDeck={selectDeck}
           tagline={messages.tagline?.content}
-          onViewFullLeaderboard={() => goToTab("leaderboard")}
           onDismissRemoveAdsBanner={dismissRemoveAdsBanner}
           onViewRemoveAds={() => goToTab("unlocks")}
+          onViewReferrals={() => goToTab("referrals")}
         />
       </div>
       <Suspense fallback={<TabLoadingFallback />}>

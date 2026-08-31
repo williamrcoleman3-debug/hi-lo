@@ -2,9 +2,9 @@ import { useThemeTokens } from "../themes/ThemeContext";
 import { FONT_TABULAR } from "../themes/registry.js";
 import { HOUSE_EDGE, TIMER_MS, RANKS } from "../engine";
 import { Card } from "./Card";
-import { WinStreakLeaderboardWidget } from "./WinStreakLeaderboardWidget";
 import { DeckSwitcher } from "./DeckSwitcher";
 import { RemoveAdsBanner } from "./RemoveAdsBanner";
+import { ReferralBanner } from "./ReferralBanner";
 import { IconLifebuoy } from "./icons.jsx";
 
 // Pure presentational render for the game table -- identical markup for
@@ -20,9 +20,9 @@ export function GameScreenView({
   deckProgress,
   selectDeck,
   tagline,
-  onViewFullLeaderboard,
   onDismissRemoveAdsBanner,
   onViewRemoveAds,
+  onViewReferrals,
   cardsLeft,
   compareCard,
   revealedCard,
@@ -111,6 +111,7 @@ export function GameScreenView({
       </div>
 
       {userId && <RemoveAdsBanner profile={profile} onDismiss={onDismissRemoveAdsBanner} onViewRemoveAds={onViewRemoveAds} />}
+      {userId && <ReferralBanner onViewReferrals={onViewReferrals} />}
 
       {/* Header */}
       <div className="w-full max-w-4xl flex items-center justify-between mb-6">
@@ -385,12 +386,11 @@ export function GameScreenView({
             )}
           </div>
 
-          {/* Leaderboard + stats */}
+          {/* Stats */}
           <div className="flex flex-col items-center gap-4 w-full">
-            <WinStreakLeaderboardWidget onViewFull={onViewFullLeaderboard} />
             <div
-              className="hidden sm:flex w-full flex-col gap-2 text-xs pt-3"
-              style={{ color: C.textMuted, borderTop: `1px solid ${C.border}` }}
+              className="hidden sm:flex w-full flex-col gap-2 text-xs"
+              style={{ color: C.textMuted }}
             >
               <div className="flex justify-between">
                 <span>cards left</span>

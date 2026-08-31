@@ -7,6 +7,9 @@ import { UsernameField } from "./UsernameField";
 import { isMuted, setMuted } from "../audio/sound.js";
 import { purchaseRemoveAds } from "../iap/purchases.js";
 import { hasPendingConfirmation } from "../iap/purchaseQueue.js";
+import { showRewardedAd } from "../ads/admob.js";
+import { grantDailyBonusGames } from "../session/gameSession.js";
+import { runRewardedBonusFlow } from "../ads/rewardGate.js";
 
 function ComingSoon({ label, C }) {
   return (
@@ -303,6 +306,81 @@ function RemoveAdsSection({ profile }) {
   );
 }
 
+// Lets a player watch a rewarded video ad for +20 game starts today (see
+// supabase/schema.sql's grant_daily_bonus_games, layered on top of
+// check_daily_play_limit()'s existing 101-per-UTC-day cap). Repeatable with
+// no limit of its own -- every message below is transient (cleared on the
+// next attempt), not persisted, since there's nothing account-level to
+// reflect here beyond what the daily play limit message already shows on
+// the game screen itself.
+function BonusGamesSection() {
+  const C = useThemeTokens();
+  const isNative = Capacitor.isNativePlatform();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleWatch = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const { status, bonusGamesToday } = await runRewardedBonusFlow({
+        showRewardedAd,
+        grantBonus: grantDailyBonusGames,
+      });
+      if (status === "granted") {
+        setResult({ tone: "win", text: `+20 games added for today (${bonusGamesToday} bonus total).` });
+      } else if (status === "closed") {
+        setResult({ tone: "muted", text: "Ad wasn't finished — no bonus games added." });
+      } else if (status === "grant-failed") {
+        setResult({ tone: "lose", text: "Ad watched, but we couldn't add your bonus — try again." });
+      } else {
+        setResult({ tone: "lose", text: "Couldn't load an ad right now — try again in a bit." });
+      }
+    } catch (err) {
+      console.error("watch rewarded ad failed:", err.message);
+      setResult({ tone: "lose", text: "Couldn't load an ad right now — try again in a bit." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="w-full max-w-4xl mb-8">
+      <h2 className="text-sm uppercase tracking-widest mb-3" style={{ color: C.textMuted }}>
+        More Games
+      </h2>
+      <div className="rounded-lg p-4 flex items-center justify-between gap-4" style={{ border: `1px solid ${C.border}` }}>
+        <div>
+          <div className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+            Watch an ad for 20 more games today
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: C.textMuted }}>
+            No limit on how many times — resets with your daily play limit at midnight UTC.
+          </div>
+          {!isNative && (
+            <div className="text-xs mt-0.5" style={{ color: C.textMuted }}>
+              Available in the iOS app.
+            </div>
+          )}
+          {result && (
+            <div className="text-xs mt-0.5" style={{ color: C[result.tone] ?? C.textMuted }}>
+              {result.text}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={handleWatch}
+          disabled={busy || !isNative}
+          className="rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-50 transition-transform active:scale-95"
+          style={{ background: C.accent, color: C.cardInk }}
+        >
+          {busy ? "…" : "Watch Ad"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function UnlocksScreen({
   profile,
   checkUsernameAvailable,
@@ -332,6 +410,8 @@ export function UnlocksScreen({
       <GameModeSection gameMode={gameMode} setGameMode={setGameMode} />
 
       <RemoveAdsSection profile={profile} />
+
+      <BonusGamesSection />
 
       <SoundSection />
 

@@ -81,3 +81,15 @@ export async function shouldShowAdForNewGame() {
   if (error) throw error;
   return data === true;
 }
+
+// Grants +20 game starts for today (see supabase/schema.sql's
+// grant_daily_bonus_games) -- only ever called after a rewarded ad
+// actually resolves "rewarded" (see src/ads/rewardGate.js), never
+// speculatively. No cap on how many times this can be called in a day;
+// resets naturally at UTC midnight along with the base daily play limit.
+// Returns the account's new total bonus-games-today count.
+export async function grantDailyBonusGames() {
+  const { data, error } = await supabase.rpc("grant_daily_bonus_games");
+  if (error) throw error;
+  return data;
+}

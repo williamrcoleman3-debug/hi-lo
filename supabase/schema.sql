@@ -2362,3 +2362,90 @@ grant execute on function public.should_show_ad_for_new_game() to authenticated;
 
 drop function if exists public.should_show_pregame_ad();
 drop function if exists public.record_hand_for_ad_gate();
+
+-- REWARDED "MORE GAMES" AD -------------------------------------------------
+-- Lets a player watch a rewarded video ad for +20 game starts today,
+-- repeatable with no cap on how many times per day -- a persistent player
+-- can effectively play unlimited games by watching enough ads. Extends
+-- check_daily_play_limit()'s existing 101-per-UTC-day check (100 real games
+-- + 1 throwaway, defined earlier in this file) rather than replacing it --
+-- the base limit is untouched, this just raises it for whoever's actually
+-- earned the bonus. Resets naturally at UTC midnight along with the base
+-- limit, since the bonus lives on the same per-day daily_game_starts row.
+--
+-- Granting trusts the client's report that the ad was watched to completion
+-- (see src/ads/admob.js#showRewardedAd, which only ever reports "rewarded"
+-- from the AdMob SDK's own earn-reward callback, never a plain dismiss).
+-- There's no AdMob server-side verification (SSV) wired up anywhere in this
+-- app, matching every other ad placement here -- this doesn't add a new
+-- trust boundary beyond what a determined client could already do by
+-- scripting any other RPC call directly.
+alter table public.daily_game_starts add column if not exists bonus_games_from_ads integer not null default 0;
+
+create or replace function public.check_daily_play_limit() returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_base_daily_limit constant int := 101;
+  v_today date := (now() at time zone 'utc')::date;
+  v_count int;
+  v_bonus int;
+  v_is_admin boolean;
+begin
+  select is_admin into v_is_admin from public.profiles where id = auth.uid();
+  if coalesce(v_is_admin, false) then
+    return;
+  end if;
+
+  insert into public.daily_game_starts (user_id, start_date, games_started)
+  values (auth.uid(), v_today, 1)
+  on conflict (user_id, start_date) do update set
+    games_started = public.daily_game_starts.games_started + 1
+  returning games_started, bonus_games_from_ads into v_count, v_bonus;
+
+  if v_count > v_base_daily_limit + coalesce(v_bonus, 0) then
+    raise exception 'daily play limit reached -- come back tomorrow';
+  end if;
+end;
+$$;
+
+revoke all on function public.check_daily_play_limit() from public, anon, authenticated;
+
+-- Grants +20 game starts for today, callable as many times as the player
+-- watches a full rewarded ad -- no daily cap on repeats, no per-game-type
+-- distinction (the bonus applies to the same shared daily counter every
+-- deck's start_game() call increments). Upserts the same daily_game_starts
+-- row check_daily_play_limit() reads, so a player who watches this before
+-- starting any games today still gets a row created with games_started
+-- left at its default 0 -- watching an ad isn't itself a game start.
+-- `for update` isn't needed the way it is in should_show_ad_for_new_game()
+-- -- the increment happens entirely inside the upsert's own SET clause,
+-- which is already atomic per row.
+create or replace function public.grant_daily_bonus_games() returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_today date := (now() at time zone 'utc')::date;
+  v_bonus integer;
+begin
+  if auth.uid() is null then
+    raise exception 'must be signed in';
+  end if;
+  perform public.check_rate_limit();
+
+  insert into public.daily_game_starts (user_id, start_date, bonus_games_from_ads)
+  values (auth.uid(), v_today, 20)
+  on conflict (user_id, start_date) do update set
+    bonus_games_from_ads = public.daily_game_starts.bonus_games_from_ads + 20
+  returning bonus_games_from_ads into v_bonus;
+
+  return v_bonus;
+end;
+$$;
+
+revoke all on function public.grant_daily_bonus_games() from public, anon, authenticated;
+grant execute on function public.grant_daily_bonus_games() to authenticated;

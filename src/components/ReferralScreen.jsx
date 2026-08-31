@@ -31,6 +31,16 @@ export function ReferralScreen({ userId, profile }) {
         <div className="w-full max-w-4xl rounded-lg p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
           Sign in to get your invite link.
         </div>
+      ) : !profile ? (
+        // Signed in, but the profile fetch (useAuth.js) hasn't resolved yet
+        // -- brief, but real: without this, the invite-link box below would
+        // render blank (inviteUrl needs profile.username) and "Share invite
+        // link" would still be tappable, sending a broken share with
+        // "undefined" in place of the code. Same race UnlocksScreen's
+        // ProfileSection/RemoveAdsSection already guard against.
+        <div className="w-full max-w-4xl rounded-lg p-6 text-sm text-center" style={{ border: `1px solid ${C.border}`, color: C.textMuted }}>
+          Loading your invite link…
+        </div>
       ) : (
         <>
           <div className="w-full max-w-4xl rounded-lg p-4 mb-6" style={{ border: `1px solid ${C.border}` }}>

@@ -57,6 +57,8 @@ export function AuthWidget({
   createProfile,
   checkUsernameAvailable,
   signOut,
+  // The Name Game passes false: Hi-Lo's banking-streak flame means nothing there.
+  showBankingStreak = true,
 }) {
   const C = useThemeTokens();
   const inputStyle = { border: `1px solid ${C.border}`, background: C.bg, color: C.textPrimary };
@@ -344,7 +346,7 @@ export function AuthWidget({
       <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
         <span aria-hidden="true">{profile.avatar}</span>
         <span style={{ color: C.textSecondary }}>{profile.username}</span>
-        {profile.current_streak > 0 && (
+        {showBankingStreak && profile.current_streak > 0 && (
           <span style={{ color: C.accent, ...FONT_TABULAR }} title={`${profile.current_streak}-day banking streak`}>
 <IconFlame />{profile.current_streak}
           </span>

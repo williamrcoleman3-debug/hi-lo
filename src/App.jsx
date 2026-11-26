@@ -16,6 +16,8 @@ import { ReferralLandingScreen } from "./components/ReferralLandingScreen.jsx";
 import { AttPreambleScreen } from "./components/AttPreambleScreen.jsx";
 import { initPurchases } from "./iap/purchases.js";
 import { shouldShowAttPreamble, requestAttPermission } from "./ads/attPrompt.js";
+import { getHomeMode } from "./namegame/siteMode.js";
+import { NameGameShell } from "./namegame/NameGameShell.jsx";
 
 // A referral link (?ref=username) opened on a mobile browser without the
 // app installed falls through Universal Links to plain Safari -- there's
@@ -165,6 +167,38 @@ export default function App() {
   // the App Store, the existing ?ref= capture still works exactly as
   // before -- this is purely an additional UI layer, not a replacement
   // for it.
+  // On/off switch (src/namegame/siteMode.js): while The Name Game is the
+  // home page, it replaces the whole Hi-Lo shell -- tabs, welcome overlay,
+  // banner, referral landing and ATT preamble all stay in the code but are
+  // not shown. Set VITE_HOME_GAME=hilo in Netlify to bring Hi-Lo back.
+  if (getHomeMode() === "namegame") {
+    return (
+      <ThemeProvider>
+        <NameGameShell
+          userId={userId}
+          profile={profile}
+          signOut={signOut}
+          messages={messages}
+          authProps={{
+            isSupabaseConfigured,
+            user,
+            profile,
+            loading,
+            signUpWithEmail,
+            requestSignInCode,
+            checkEmailConfirmed,
+            verifyCode,
+            signInWithPassword,
+            setPassword,
+            createProfile,
+            checkUsernameAvailable,
+            signOut,
+          }}
+        />
+      </ThemeProvider>
+    );
+  }
+
   const referralLandingUsername = getReferralLandingUsername();
   if (referralLandingUsername) {
     return (

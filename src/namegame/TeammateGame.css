@@ -67,10 +67,14 @@ LAYOUT: one column, max 560px, scoreboard on top, guess bar under the card.
 .tg-teams li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; padding: 5px 0; border-top: 1px dashed #d6d3c4; font-weight: 600; }
 .tg-teams li span { font-variant-numeric: tabular-nums; color: #56615a; font-weight: 400; white-space: nowrap; }
 
-.tg-guess { position: relative; margin-top: 18px; }
+.tg-guess { position: relative; margin-top: 18px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+.tg-guess .tg-sugg { grid-column: 1 / -1; }
+.tg-skip { min-width: 84px; height: 56px; border: 0; border-radius: 12px; background: #0a0f0c; color: #f8fafc; font: 800 20px/1 "Saira Condensed", sans-serif; box-shadow: 0 5px 0 rgba(0,0,0,.35); }
+.tg-skip b { color: #fbbf24; margin-left: 4px; }
+.tg-skip:disabled { opacity: .45; cursor: not-allowed; }
 .tg-guess input { width: 100%; height: 56px; border: 0; border-radius: 12px; padding: 0 16px; background: #fff; color: var(--ink);
   box-shadow: 0 5px 0 #0a0f0c; font-size: 18px; }
-.tg-sugg { list-style: none; margin: 8px 0 0; padding: 4px; background: #0a0f0c; border-radius: 12px; }
+.tg-sugg { list-style: none; margin: 0; padding: 4px; background: #0a0f0c; border-radius: 12px; }
 .tg-sugg button { width: 100%; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
   border: 0; border-radius: 8px; background: transparent; color: var(--chalk); padding: 8px 12px; text-align: left; }
 .tg-sugg button.on, .tg-sugg button:hover { background: #1f2a22; }

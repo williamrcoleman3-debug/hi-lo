@@ -23,6 +23,14 @@ export const DEFAULT_MODE = "franchise";
 export const MYSTERY_FROM_YEAR = 1970; // mystery players come from the merger era
 export const ROUND_SECONDS = 25;
 
+// Skips: 2 per game, plus 1 for every 10 correct answers in that game.
+// A skip swaps in a new player and resets the clock; the streak is kept.
+export const STARTING_SKIPS = 2;
+export const CORRECT_PER_BONUS_SKIP = 10;
+export function skipsLeft(streak, used) {
+  return Math.max(0, STARTING_SKIPS + Math.floor(streak / CORRECT_PER_BONUS_SKIP) - used);
+}
+
 // Who can be the mystery player, by current streak. Only Pro Bowlers are
 // prompted: S = skill (QB/RB/FB/WR/TE), D = defense, O = offensive line.
 // Anyone at all can be typed as an answer.

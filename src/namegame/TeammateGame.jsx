@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { loadEngine, MODES, DEFAULT_MODE, ROUND_SECONDS, groupsForStreak, GROUP_LABEL } from "./engine.js";
+import { loadEngine, MODES, DEFAULT_MODE, ROUND_SECONDS, skipsLeft, groupsForStreak, GROUP_LABEL } from "./engine.js";
 import { fetchNameGameLeaderboard, submitNameGameStreak } from "./leaderboard.js";
 import "./TeammateGame.css";
 
@@ -22,6 +22,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
   const [over, setOver] = useState(null);
   const seen = useRef(new Set());
   const streakRef = useRef(0);
+  const [skipsUsed, setSkipsUsed] = useState(0);
   const deadline = useRef(0);
   const inputRef = useRef(null);
 
@@ -46,6 +47,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
     setMode(m);
     setStreak(0);
     streakRef.current = 0;
+    setSkipsUsed(0);
     setOver(null);
     seen.current = new Set();
     nextRound();
@@ -90,6 +92,13 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
     } else {
       endRun("wrong", display);
     }
+  };
+
+  const skipsAvailable = skipsLeft(streak, skipsUsed);
+  const skip = () => {
+    if (phase !== "play" || skipsAvailable < 1) return;
+    setSkipsUsed((n) => n + 1);
+    nextRound();
   };
 
   const onKey = (e) => {
@@ -147,6 +156,15 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
                 autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck={false}
                 aria-label="Teammate name"
               />
+              <button
+                type="button"
+                className="tg-skip"
+                onClick={skip}
+                disabled={skipsAvailable < 1}
+                aria-label={`Skip this player, ${skipsAvailable} left`}
+              >
+                Skip <b>{skipsAvailable}</b>
+              </button>
               {suggestions.length > 0 && (
                 <ul className="tg-sugg" role="listbox">
                   {suggestions.map((s, i) => (

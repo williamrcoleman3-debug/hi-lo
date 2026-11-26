@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { loadEngine, MODES } from "./engine.js";
+import { loadEngine, MODES, ROUND_SECONDS, groupsForStreak, GROUP_LABEL } from "./engine.js";
 import { fetchNameGameLeaderboard, submitNameGameStreak } from "./leaderboard.js";
 import "./TeammateGame.css";
 
-const ROUND_MS = 10000;
+const ROUND_MS = ROUND_SECONDS * 1000;
 const FEEDBACK_MS = 1200;
 
 const yrs = (a, b) => (a === b ? `${a}` : `${a}–${String(b).slice(-2)}`);
@@ -21,6 +21,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
   const [feedback, setFeedback] = useState(null);
   const [over, setOver] = useState(null);
   const seen = useRef(new Set());
+  const streakRef = useRef(0);
   const deadline = useRef(0);
   const inputRef = useRef(null);
 
@@ -29,7 +30,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
   }, [dataUrl]);
 
   const nextRound = useCallback(() => {
-    const id = engine.randomMystery(seen.current);
+    const id = engine.randomMystery(seen.current, streakRef.current);
     seen.current.add(id);
     setMystery(id);
     setQuery("");
@@ -44,6 +45,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
   const start = (m) => {
     setMode(m);
     setStreak(0);
+    streakRef.current = 0;
     setOver(null);
     seen.current = new Set();
     nextRound();
@@ -55,6 +57,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
       guessName,
       answers: engine.sampleAnswers(mystery, mode),
       mysteryName: engine.player(mystery).name,
+      lines: engine.careerLines(engine.player(mystery), mode),
     });
     setPhase("over");
   }, [engine, mystery, mode]);
@@ -79,7 +82,8 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
     if (phase !== "play") return;
     const res = engine.check(mystery, key, mode);
     if (res.ok) {
-      setStreak((s) => s + 1);
+      streakRef.current += 1;
+      setStreak(streakRef.current);
       setFeedback({ name: res.guess.name, via: res.via });
       setPhase("correct");
       setTimeout(nextRound, FEEDBACK_MS);
@@ -125,7 +129,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
       {(phase === "play" || phase === "correct") && p && (
         <section className="tg-field">
           <div className="tg-bar"><i style={{ width: `${(left / ROUND_MS) * 100}%` }} /></div>
-          <MysteryCard p={p} lines={engine.careerLines(p, mode)} mode={mode} />
+          <MysteryCard info={engine.cardInfo(mystery)} mode={mode} streak={streak} />
 
           {phase === "correct" && feedback ? (
             <div className="tg-good">
@@ -174,17 +178,14 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
   );
 }
 
-function MysteryCard({ p, lines, mode }) {
+function MysteryCard({ info, mode, streak }) {
+  const groups = groupsForStreak(streak);
   return (
     <article className="tg-card">
-      <div className="tg-pos">{p.pos || "—"}</div>
-      <h2>{p.name}</h2>
-      <p className="tg-span">{p.from}–{p.to} · {MODES[mode].label}</p>
-      <ul className="tg-teams">
-        {lines.map((l, i) => (
-          <li key={i}><span>{yrs(l.from, l.to)}</span>{l.team}</li>
-        ))}
-      </ul>
+      <div className="tg-pos">{info.pos || "—"}</div>
+      <h2>{info.name}</h2>
+      <p className="tg-span">Played {info.from === info.to ? info.from : `${info.from}–${info.to}`} · {MODES[mode].label}</p>
+      <p className="tg-pool">Pro Bowl pool: {groups.map((g) => GROUP_LABEL[g]).join(" + ")}</p>
     </article>
   );
 }
@@ -194,8 +195,8 @@ function Menu({ engine, signedIn, onStart }) {
   return (
     <section className="tg-menu">
       <p className="tg-lede">
-        You get a random NFL player. Name anyone who played with him before the
-        10-second play clock runs out. One miss ends the streak.
+        You get a random Pro Bowler. Name anyone who played with him before the
+        {" "}{ROUND_SECONDS}-second play clock runs out. One miss ends the streak.
       </p>
       <div className="tg-modes">
         {Object.values(MODES).map((m) => (
@@ -206,7 +207,8 @@ function Menu({ engine, signedIn, onStart }) {
         ))}
       </div>
       <p className="tg-fine">
-        {engine.playerCount.toLocaleString()} players, 1932–today. Mystery players are from 1970 on.
+        Skill players first. Pro Bowl defenders join at a 20 streak, offensive linemen at 40.
+        Any of {engine.playerCount.toLocaleString()} players since 1932 counts as an answer.
         {!signedIn && " Sign in (top right) to get on the leaderboard."}
       </p>
       <div className="tg-tabs" role="tablist">
@@ -273,6 +275,14 @@ function GameOver({ over, streak, mode, userId, profile, onAgain, onMenu }) {
       {over.answers.length > 0 && (
         <p className="tg-fine">You could have said {over.answers.join(", ")}.</p>
       )}
+      <details className="tg-reveal">
+        <summary>{over.mysteryName}'s teams</summary>
+        <ul className="tg-teams">
+          {over.lines.map((l, i) => (
+            <li key={i}><span>{yrs(l.from, l.to)}</span>{l.team}</li>
+          ))}
+        </ul>
+      </details>
       {post === "signed_out" && <p className="tg-note">Sign in (top right) to post your streaks to the leaderboard.</p>}
       {post === "saving" && <p className="tg-fine">Posting your streak…</p>}
       {post === "saved" && <p className="tg-fine">Posted as {profile?.username ?? "you"}. Only your best streak shows.</p>}

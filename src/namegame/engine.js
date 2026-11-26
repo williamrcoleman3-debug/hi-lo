@@ -19,7 +19,17 @@ export const MODES = {
 };
 
 export const MYSTERY_FROM_YEAR = 1970; // mystery players come from the merger era
-export const MYSTERY_MIN_SEASONS = 3;  // skip one-and-done guys for the mystery card
+export const ROUND_SECONDS = 25;
+
+// Who can be the mystery player, by current streak. Only Pro Bowlers are
+// prompted: S = skill (QB/RB/FB/WR/TE), D = defense, O = offensive line.
+// Anyone at all can be typed as an answer.
+export function groupsForStreak(streak) {
+  if (streak >= 40) return ["S", "D", "O"];
+  if (streak >= 20) return ["S", "D"];
+  return ["S"];
+}
+export const GROUP_LABEL = { S: "Skill players", D: "Defense", O: "O-line" };
 
 export function normalize(s) {
   return s
@@ -39,7 +49,7 @@ export async function loadEngine(url = "/nfl-teammates.json") {
 }
 
 export function buildEngine({ teams, players }) {
-  const P = players.map(([name, pos, stints], id) => {
+  const P = players.map(([name, pos, stints, pb = ""], id) => {
     const years = stints.map((s) => teams[s][2]);
     const seasons = new Set(years);
     const norm = normalize(name);
@@ -47,6 +57,7 @@ export function buildEngine({ teams, players }) {
       id,
       name,
       pos,
+      pb,
       stints,
       franchises: new Set(stints.map((s) => teams[s][1])),
       from: Math.min(...years),
@@ -79,9 +90,8 @@ export function buildEngine({ teams, players }) {
     if (!cur || cur.y < y) franchiseName.set(f, { name, y });
   });
 
-  const mysteryPool = P.filter(
-    (p) => p.to >= MYSTERY_FROM_YEAR && p.nSeasons >= MYSTERY_MIN_SEASONS
-  ).map((p) => p.id);
+  const pools = { S: [], D: [], O: [] };
+  for (const p of P) if (p.pb && p.to >= MYSTERY_FROM_YEAR) pools[p.pb].push(p.id);
 
   /** Teams list for the mystery card, grouped into runs: "2000–19 New England Patriots". */
   function careerLines(p, mode) {
@@ -177,12 +187,19 @@ export function buildEngine({ teams, players }) {
       .map((p) => p.name);
   }
 
-  function randomMystery(exclude = new Set()) {
+  function randomMystery(exclude = new Set(), streak = 0) {
+    const pool = groupsForStreak(streak).flatMap((g) => pools[g]);
     for (let i = 0; i < 50; i++) {
-      const id = mysteryPool[Math.floor(Math.random() * mysteryPool.length)];
+      const id = pool[Math.floor(Math.random() * pool.length)];
       if (!exclude.has(id)) return id;
     }
-    return mysteryPool[0];
+    return pool[0];
+  }
+
+  /** What the mystery card shows before the guess -- no teams. */
+  function cardInfo(id) {
+    const p = P[id];
+    return { name: p.name, pos: p.pos, from: p.from, to: p.to };
   }
 
   return {
@@ -193,5 +210,6 @@ export function buildEngine({ teams, players }) {
     careerLines,
     sampleAnswers,
     randomMystery,
+    cardInfo,
   };
 }

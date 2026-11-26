@@ -129,13 +129,80 @@ for (t, y) in sorted(set(zip(df.team, df.season))):
     teams[(t, y)] = len(team_list)
     team_list.append([name, f, int(y)])
 
+# ---- Pro Bowl groups: S = skill (QB/RB/FB/WR/TE), D = defense, O = offensive line
+GROUP = {**{p: "S" for p in ["QB", "RB", "FB", "HB", "WR", "TE", "FL", "SE"]},
+         **{p: "D" for p in ["DE", "DT", "NT", "DL", "LB", "OLB", "ILB", "MLB", "CB", "S", "SS", "FS", "DB", "SAF"]},
+         **{p: "O" for p in ["T", "OT", "G", "OG", "C", "OL", "LT", "RT", "LG", "RG"]}}
+
+
+def norm(n):
+    import unicodedata
+    n = unicodedata.normalize("NFD", str(n))
+    n = "".join(c for c in n if unicodedata.category(c) != "Mn").lower()
+    n = re.sub(r"[^a-z0-9 ]", "", n)
+    n = re.sub(r"\b(jr|sr|ii|iii|iv)\b", "", n)
+    return re.sub(r"\s+", " ", n).strip()
+
+
 players = []
-pid = {}
+key_info = {}
 for key, g in df.sort_values("season").groupby("key", sort=False):
     pos = g.position.dropna().mode()
     pos = pos.iloc[0] if len(pos) else ""
     stints = sorted(teams[(t, y)] for t, y in zip(g.team, g.season))
-    players.append([g.full_name.iloc[-1], pos, stints])
+    key_info[key] = dict(name=g.full_name.iloc[-1], pos=pos, stints=stints,
+                         gsis=set(g.gsis_id.dropna()), n=norm(g.full_name.iloc[-1]),
+                         first=int(g.season.min()), last=int(g.season.max()), pb="")
+
+by_gsis = {gid: k for k, v in key_info.items() for gid in v["gsis"]}
+by_norm = collections.defaultdict(list)
+for k, v in key_info.items():
+    by_norm[v["n"]].append(k)
+
+
+def set_pb(k, pos):
+    grp = GROUP.get(str(pos).split(",")[0].split("/")[0].strip().upper(), "")
+    if not grp:
+        return
+    cur = key_info[k]["pb"]
+    # a player keeps the most "offense-skill" group he ever made it at
+    if not cur or "SDO".index(grp) < "SDO".index(cur):
+        key_info[k]["pb"] = grp
+
+
+hits = miss = 0
+dp = pd.read_csv("/home/claude/draft_picks.csv", low_memory=False)
+for r in dp[dp.probowls > 0].itertuples():
+    k = by_gsis.get(r.gsis_id) if isinstance(r.gsis_id, str) else None
+    if not k:
+        cands = [c for c in by_norm.get(norm(r.pfr_player_name), [])
+                 if r.season <= key_info[c]["first"] <= r.season + 3]
+        k = cands[0] if len(cands) == 1 else None
+    if k:
+        set_pb(k, r.position); hits += 1
+    else:
+        miss += 1
+print("draft pro bowl rows matched", hits, "unmatched", miss)
+
+# Optional: full Pro Bowl list (Name|Position|first Pro Bowl year), e.g. from Wikipedia
+import os
+if os.path.exists("/home/claude/probowl_list.txt"):
+    h = m = 0
+    for line in open("/home/claude/probowl_list.txt"):
+        parts = [x.strip() for x in line.split("|")]
+        if len(parts) != 3 or not parts[2][:4].isdigit():
+            continue
+        name, pos, yr = parts[0], parts[1], int(parts[2][:4])
+        cands = [c for c in by_norm.get(norm(name), [])
+                 if key_info[c]["first"] - 1 <= yr <= key_info[c]["last"] + 1]
+        if len(cands) == 1:
+            set_pb(cands[0], pos); h += 1
+        else:
+            m += 1
+    print("pro bowl list matched", h, "unmatched", m)
+
+for v in key_info.values():
+    players.append([v["name"], v["pos"], v["stints"], v["pb"]])
 
 players.sort(key=lambda p: (min(team_list[s][2] for s in p[2]), p[0]))
 print("players", len(players), "team-seasons", len(team_list),

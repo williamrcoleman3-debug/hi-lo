@@ -121,3 +121,7 @@ LAYOUT: one column, max 560px, scoreboard on top, guess bar under the card.
 .ng-foot { max-width: 560px; width: 100%; margin: 0 auto; padding: 16px 16px max(20px, env(safe-area-inset-bottom));
   display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; font-size: 13px; border-top: 1px solid rgba(255,255,255,.2); }
 .ng-foot button, .ng-foot a { color: rgba(248,250,252,.8); background: none; border: 0; padding: 6px 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+.tg-pool { margin: 0; font-size: 13px; color: #56615a; }
+.tg-reveal { margin: 10px 0; background: var(--card); color: var(--ink); border-radius: 12px; padding: 10px 14px; }
+.tg-reveal summary { cursor: pointer; font-weight: 600; min-height: 28px; }

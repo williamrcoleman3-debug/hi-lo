@@ -141,7 +141,10 @@ def norm(n):
     n = "".join(c for c in n if unicodedata.category(c) != "Mn").lower()
     n = re.sub(r"[^a-z0-9 ]", "", n)
     n = re.sub(r"\b(jr|sr|ii|iii|iv)\b", "", n)
-    return re.sub(r"\s+", " ", n).strip()
+    n = re.sub(r"\s+", " ", n).strip()
+    # "a j brown" -> "aj brown" so initials match either spelling
+    n = re.sub(r"\b([a-z]) ([a-z])\b(?= )", r"\1\2", n)
+    return n
 
 
 players = []
@@ -156,8 +159,11 @@ for key, g in df.sort_values("season").groupby("key", sort=False):
 
 by_gsis = {gid: k for k, v in key_info.items() for gid in v["gsis"]}
 by_norm = collections.defaultdict(list)
+by_last = collections.defaultdict(list)
 for k, v in key_info.items():
     by_norm[v["n"]].append(k)
+    if v["n"]:
+        by_last[v["n"].split(" ")[-1]].append(k)
 
 
 def set_pb(k, pos):
@@ -188,18 +194,30 @@ print("draft pro bowl rows matched", hits, "unmatched", miss)
 import os
 if os.path.exists("/home/claude/probowl_list.txt"):
     h = m = 0
+    unmatched = []
     for line in open("/home/claude/probowl_list.txt"):
         parts = [x.strip() for x in line.split("|")]
         if len(parts) != 3 or not parts[2][:4].isdigit():
             continue
         name, pos, yr = parts[0], parts[1], int(parts[2][:4])
-        cands = [c for c in by_norm.get(norm(name), [])
-                 if key_info[c]["first"] - 1 <= yr <= key_info[c]["last"] + 1]
+        grp = GROUP.get(pos.split(",")[0].strip().upper(), "")
+        if " " in name.strip():
+            cands = [c for c in by_norm.get(norm(name), [])
+                     if key_info[c]["first"] - 1 <= yr <= key_info[c]["last"] + 1]
+            if len(cands) > 1:  # same name: keep the one at the listed position group
+                cands = [c for c in cands if GROUP.get(str(key_info[c]["pos"]).upper(), "") == grp] or cands
+        else:
+            # surname-only row: same last name, active that year, same side of the ball
+            cands = [c for c in by_last.get(norm(name), [])
+                     if key_info[c]["first"] <= yr <= key_info[c]["last"] + 1
+                     and GROUP.get(str(key_info[c]["pos"]).upper(), "") == grp]
         if len(cands) == 1:
             set_pb(cands[0], pos); h += 1
         else:
             m += 1
+            unmatched.append(line.strip())
     print("pro bowl list matched", h, "unmatched", m)
+    open("/home/claude/probowl_unmatched.txt", "w").write("\n".join(unmatched))
 
 for v in key_info.values():
     players.append([v["name"], v["pos"], v["stints"], v["pb"]])

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { loadEngine, MODES, ROUND_SECONDS, groupsForStreak, GROUP_LABEL } from "./engine.js";
+import { loadEngine, MODES, DEFAULT_MODE, ROUND_SECONDS, groupsForStreak, GROUP_LABEL } from "./engine.js";
 import { fetchNameGameLeaderboard, submitNameGameStreak } from "./leaderboard.js";
 import "./TeammateGame.css";
 
@@ -12,7 +12,7 @@ export default function TeammateGame({ dataUrl = "/nfl-teammates.json", userId =
   const [engine, setEngine] = useState(null);
   const [loadErr, setLoadErr] = useState("");
   const [phase, setPhase] = useState("menu"); // menu | play | correct | over
-  const [mode, setMode] = useState("season");
+  const [mode, setMode] = useState(DEFAULT_MODE);
   const [mystery, setMystery] = useState(null);
   const [streak, setStreak] = useState(0);
   const [left, setLeft] = useState(ROUND_MS);
@@ -191,7 +191,7 @@ function MysteryCard({ info, mode, streak }) {
 }
 
 function Menu({ engine, signedIn, onStart }) {
-  const [tab, setTab] = useState("season");
+  const [tab, setTab] = useState(DEFAULT_MODE);
   return (
     <section className="tg-menu">
       <p className="tg-lede">
@@ -275,14 +275,14 @@ function GameOver({ over, streak, mode, userId, profile, onAgain, onMenu }) {
       {over.answers.length > 0 && (
         <p className="tg-fine">You could have said {over.answers.join(", ")}.</p>
       )}
-      <details className="tg-reveal">
-        <summary>{over.mysteryName}'s teams</summary>
+      <div className="tg-reveal">
+        <h3>{over.mysteryName} played for</h3>
         <ul className="tg-teams">
           {over.lines.map((l, i) => (
             <li key={i}><span>{yrs(l.from, l.to)}</span>{l.team}</li>
           ))}
         </ul>
-      </details>
+      </div>
       {post === "signed_out" && <p className="tg-note">Sign in (top right) to post your streaks to the leaderboard.</p>}
       {post === "saving" && <p className="tg-fine">Posting your streak…</p>}
       {post === "saved" && <p className="tg-fine">Posted as {profile?.username ?? "you"}. Only your best streak shows.</p>}

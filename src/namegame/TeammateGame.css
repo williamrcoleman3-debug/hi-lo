@@ -124,4 +124,4 @@ LAYOUT: one column, max 560px, scoreboard on top, guess bar under the card.
 
 .tg-pool { margin: 0; font-size: 13px; color: #56615a; }
 .tg-reveal { margin: 10px 0; background: var(--card); color: var(--ink); border-radius: 12px; padding: 10px 14px; }
-.tg-reveal summary { cursor: pointer; font-weight: 600; min-height: 28px; }
+.tg-reveal h3 { margin: 0 0 4px; font: 800 20px/1.1 "Saira Condensed", sans-serif; }

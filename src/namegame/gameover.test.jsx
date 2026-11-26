@@ -21,7 +21,7 @@ import TeammateGame from "./TeammateGame.jsx";
 import { DEFAULT_MODE } from "./engine.js";
 
 let root, el;
-afterEach(() => { act(() => root.unmount()); el.remove(); });
+afterEach(() => { if (root) act(() => root.unmount()); el?.remove(); root = el = undefined; });
 
 async function mount() {
   el = document.createElement("div");

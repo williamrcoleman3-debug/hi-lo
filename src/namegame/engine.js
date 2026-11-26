@@ -5,18 +5,20 @@
 //   teams:   [[displayName, franchiseKey, season], ...]   one row per team-season
 //   players: [[name, position, [teamSeasonIdx, ...]], ...]
 
+// Listed in menu order; franchise is the default.
 export const MODES = {
-  season: {
-    id: "season",
-    label: "Same season",
-    blurb: "Name someone who was on his team in the same season.",
-  },
   franchise: {
     id: "franchise",
     label: "Same franchise",
     blurb: "Name anyone who ever played for one of his franchises.",
   },
+  season: {
+    id: "season",
+    label: "Same season",
+    blurb: "Name someone who was on his team in the same season.",
+  },
 };
+export const DEFAULT_MODE = "franchise";
 
 export const MYSTERY_FROM_YEAR = 1970; // mystery players come from the merger era
 export const ROUND_SECONDS = 25;
